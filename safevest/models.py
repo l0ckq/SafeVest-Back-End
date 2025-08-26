@@ -27,13 +27,15 @@ class Usuario(models.Model):
     ativo = models.BooleanField(default=True)
     criado_em = models.DateTimeField(auto_now_add=True)
 
+
+
 class Veste(models.Model):
     id_veste = models.AutoField(primary_key=True)
     id_usuario = models.ForeignKey(Usuario, on_delete=models.DO_NOTHING)
 
 class UsoVeste(models.Model):
     id_uso = models.AutoField(primary_key=True)
-    id_veste = models.ForeignKey(Veste, on_delete=models.DO_NOTHING)
+    veste = models.ForeignKey(Veste, on_delete=models.DO_NOTHING)
     inicio_uso = models.DateTimeField()
     fim_uso = models.DateTimeField()
 

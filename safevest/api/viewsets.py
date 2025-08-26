@@ -160,7 +160,7 @@ class VesteViewSet(viewsets.ModelViewSet):
 class UsoVesteViewSet(viewsets.ModelViewSet):
     queryset = UsoVeste.objects.all()
     serializer_class = UsoVesteSerializer
-     
+
     @action(detail=False, methods=['get'], url_path='vestes-usuario/(?P<id_usuario>[^/.]+)')
     def listar_vestes_usuario(self, request, id_usuario=None):
         try:
@@ -168,9 +168,10 @@ class UsoVesteViewSet(viewsets.ModelViewSet):
         except Usuario.DoesNotExist:
             return Response({"detail": "Usuário não encontrado"}, status=status.HTTP_404_NOT_FOUND)
 
-        vestes = Veste.objects.filter(id_usuario=usuario)
+        vestes = Veste.objects.filter(id_usuario=usuario)  
         serializer = VesteSerializer(vestes, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
 
 
 class LeituraSensorViewSet(viewsets.ModelViewSet):
