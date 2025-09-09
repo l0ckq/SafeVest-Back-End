@@ -35,7 +35,7 @@ class Veste(models.Model):
 
 class UsoVeste(models.Model):
     id_uso = models.AutoField(primary_key=True)
-    veste = models.ForeignKey(Veste, on_delete=models.DO_NOTHING)
+    id_veste = models.ForeignKey(Veste, on_delete=models.DO_NOTHING)
     inicio_uso = models.DateTimeField()
     fim_uso = models.DateTimeField()
 

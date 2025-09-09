@@ -1,9 +1,13 @@
+import datetime
+from decimal import Decimal
 import os
 import sys
 import json
+from xmlrpc.client import DateTime
 import django
 import paho.mqtt.client as mqtt
 import ssl  # Necessário para a configuração TLS
+
 
 # --- CONFIGURAÇÃO DO DJANGO ---
 # Garante que o script possa encontrar e usar os componentes do seu projeto.
@@ -15,7 +19,7 @@ django.setup()
 # --- IMPORTAÇÃO DE MODELOS DJANGO ---
 # Importe seus modelos APÓS a inicialização do Django.
 # Assumindo que seu app se chama 'core' e o modelo 'DadosSensor'.
-from safevest.models import LeituraSensor
+from safevest.models import LeituraSensor, Veste
 
 # --- CONFIGURAÇÕES DO MQTT (Extraídas das suas imagens) ---
 MQTT_BROKER = "jaragua.lmq.cloudamqp.com"
@@ -45,17 +49,18 @@ def on_message(client, userdata, msg):
         print(f"Payload (JSON): {payload}")
 
         
-
+        v = Veste.objects.get(pk=payload['id_veste'])
+        agora = datetime.datetime.now()
         # Assumindo que seu modelo 'DadosSensor' tem estes campos
         # e que o JSON enviado pela veste tem estas chaves.
         LeituraSensor.objects.create(
-            id_veste=payload['id_veste'],
-            timestamp=payload['timestamp'],
-            batimentos_cardiacos=payload['batimento'],
-            temperatura_corporal=payload['temperatura_A'],
-            temperatura_ambiente=payload['temperatura_C'],
-            nivel_co=payload['nivel_co'],
-            nivel_bateria=payload['nivel_bateria']
+            id_veste= v,
+            timestamp= agora,
+            batimento= int(payload['batimento']),
+            temperatura_A=Decimal(payload['temperatura_A']),
+            temperatura_C=Decimal(payload['temperatura_C']),
+            nivel_co=Decimal(payload['nivel_co']),
+            nivel_bateria=Decimal(payload['nivel_bateria'])
         )
         print(">> Dados salvos no banco de dados com sucesso!")
 
