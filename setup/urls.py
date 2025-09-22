@@ -1,9 +1,8 @@
-# setup/urls.py (Versão Corrigida)
-
 from django.contrib import admin
 from django.urls import path, include
 from safevest.api import viewsets
-from safevest.views import AlertaListCreate 
+
+from safevest.api.views import AlertaListCreate 
 from rest_framework import routers, permissions
 from drf_yasg import openapi
 from drf_yasg.views import get_schema_view
@@ -33,7 +32,6 @@ route.register(r'leiturasensor', viewsets.LeituraSensorViewSet)
 
 api_urlpatterns = [
     path('', include(route.urls)),
-    # A rota de alertas agora também faz parte da API
     path('alertas/', AlertaListCreate.as_view(), name='alerta-list-create'),
 ]
 
@@ -42,7 +40,6 @@ urlpatterns = [
     path('', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
     path('swagger/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
     path('redoc/', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),
-    
     path('api/', include(api_urlpatterns)),
 ]
 
