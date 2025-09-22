@@ -21,19 +21,19 @@ def on_message(client, userdata, msg):
     try:
         data = json.loads(msg.payload.decode('utf-8'))
         print(f"<- Recebido: {data}")
-        
-        # CORREÇÃO: O payload agora usa os mesmos nomes de campos do models.py.
-        # Não precisamos mais do "get", pois o sensor já envia o nome correto.
+
+        # O sensor já está enviando os nomes corretos.
+        # Agora, o cérebro pode usar os dados diretamente.
         leitura_payload = {
-            "veste": data["veste"],
-            "timestamp": data["timestamp"],
-            "batimento": data["batimento"],
-            "temperatura_A": data["temperatura_A"],
-            "temperatura_C": data["temperatura_C"],
-            "nivel_co": data["nivel_co"],
-            "nivel_bateria": data["nivel_bateria"]
+            "veste": data.get("veste"),
+            "timestamp": data.get("timestamp"),
+            "batimento": data.get("batimento"),
+            "temperatura_A": data.get("temperatura_A"),
+            "temperatura_C": data.get("temperatura_C"),
+            "nivel_co": data.get("nivel_co"),
+            "nivel_bateria": data.get("nivel_bateria")
         }
-        
+
         print(f"   |-> Enviando para {API_LEITURAS}...")
         response = requests.post(API_LEITURAS, json=leitura_payload)
         
@@ -49,7 +49,7 @@ def on_message(client, userdata, msg):
 
         if status_calculado in ['Alerta', 'Emergência']:
             alerta_payload = {
-                "usuario": data["usuario"],
+                "usuario": data.get("usuario"),
                 "leitura_associada": leitura_salva.get('id_leitura'),
                 "tipo_alerta": status_calculado
             }
@@ -68,3 +68,14 @@ def calcularStatus(worker_data):
     if batimento > 160 or batimento < 50: return 'Emergência'
     if batimento > 120 or batimento < 60: return 'Alerta'
     return 'Seguro'
+
+# --- Início do código principal ---
+client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
+client.username_pw_set(MQTT_USERNAME, MQTT_PASSWORD)
+client.on_connect = on_connect
+client.on_message = on_message
+
+print(f"Tentando conectar ao broker MQTT em {BROKER_ADDRESS}...")
+client.connect(BROKER_ADDRESS, BROKER_PORT)
+
+client.loop_forever()

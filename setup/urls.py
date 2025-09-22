@@ -1,14 +1,14 @@
 from django.contrib import admin
 from django.urls import path, include
 from safevest.api import viewsets
-
-from safevest.api.views import AlertaListCreate 
+from safevest.views import AlertaListCreate 
 from rest_framework import routers, permissions
 from drf_yasg import openapi
 from drf_yasg.views import get_schema_view
 from django.conf import settings
 from django.conf.urls.static import static
 
+# O resto do seu arquivo, que já estava perfeito, continua igual.
 schema_view = get_schema_view(
     openapi.Info(
         title="SafeVest API",

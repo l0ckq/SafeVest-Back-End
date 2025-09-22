@@ -18,7 +18,7 @@ class Setor(models.Model):
 class Usuario(models.Model):
     empresa = models.ForeignKey(Empresa, on_delete=models.DO_NOTHING, related_name="usuarios", null=True, blank=True)
     setor = models.ForeignKey(Setor, on_delete=models.SET_NULL, null=True, blank=True, related_name="usuarios")
-    id_usuario = models.AutoField(primary_key=True)
+    usuario = models.AutoField(primary_key=True)
     nome_completo = models.CharField(max_length=255)
     email = models.EmailField(max_length=255, unique=True)
     ativo = models.BooleanField(default=True)
@@ -28,20 +28,17 @@ class Usuario(models.Model):
         return self.nome_completo
 
 class Veste(models.Model):
-    id_veste = models.AutoField(primary_key=True)
-    # CORREÇÃO: Usando a convenção do Django para ForeignKeys.
+    veste = models.AutoField(primary_key=True)
     usuario = models.ForeignKey(Usuario, on_delete=models.DO_NOTHING)
 
 class UsoVeste(models.Model):
     id_uso = models.AutoField(primary_key=True)
-    # CORREÇÃO: Usando a convenção do Django.
     veste = models.ForeignKey(Veste, on_delete=models.DO_NOTHING)
     inicio_uso = models.DateTimeField()
     fim_uso = models.DateTimeField()
 
 class LeituraSensor(models.Model):
     id_leitura = models.AutoField(primary_key=True)
-    # CORREÇÃO: Usando a convenção do Django.
     veste = models.ForeignKey(Veste, on_delete=models.DO_NOTHING)
     timestamp = models.DateTimeField()
     batimento = models.IntegerField()
