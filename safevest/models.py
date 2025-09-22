@@ -4,12 +4,14 @@ class Empresa(models.Model):
     cnpj = models.CharField(max_length=20, unique=True)
     nome_empresa = models.CharField(max_length=200)
     criado_em = models.DateTimeField(auto_now_add=True)
+
     def __str__(self):
         return self.nome_empresa
 
 class Setor(models.Model):
     empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, related_name="setores")
     nome = models.CharField(max_length=200)
+
     def __str__(self):
         return f"{self.nome} - {self.empresa.nome_empresa}"
 
@@ -21,22 +23,26 @@ class Usuario(models.Model):
     email = models.EmailField(max_length=255, unique=True)
     ativo = models.BooleanField(default=True)
     criado_em = models.DateTimeField(auto_now_add=True)
+
     def __str__(self):
         return self.nome_completo
 
 class Veste(models.Model):
     id_veste = models.AutoField(primary_key=True)
-    id_usuario = models.ForeignKey(Usuario, on_delete=models.DO_NOTHING)
+    # CORREÇÃO: Usando a convenção do Django para ForeignKeys.
+    usuario = models.ForeignKey(Usuario, on_delete=models.DO_NOTHING)
 
 class UsoVeste(models.Model):
     id_uso = models.AutoField(primary_key=True)
+    # CORREÇÃO: Usando a convenção do Django.
     veste = models.ForeignKey(Veste, on_delete=models.DO_NOTHING)
     inicio_uso = models.DateTimeField()
     fim_uso = models.DateTimeField()
 
 class LeituraSensor(models.Model):
     id_leitura = models.AutoField(primary_key=True)
-    id_veste = models.ForeignKey(Veste, on_delete=models.DO_NOTHING)
+    # CORREÇÃO: Usando a convenção do Django.
+    veste = models.ForeignKey(Veste, on_delete=models.DO_NOTHING)
     timestamp = models.DateTimeField()
     batimento = models.IntegerField()
     temperatura_A = models.DecimalField(max_digits=5, decimal_places=2)
@@ -51,9 +57,7 @@ class Alerta(models.Model):
     ]
 
     usuario = models.ForeignKey(Usuario, on_delete=models.CASCADE, related_name='alertas')
-    
     leitura_associada = models.ForeignKey(LeituraSensor, on_delete=models.CASCADE)
-    
     tipo_alerta = models.CharField(max_length=20, choices=TIPO_ALERTA_CHOICES)
     timestamp = models.DateTimeField(auto_now_add=True)
     

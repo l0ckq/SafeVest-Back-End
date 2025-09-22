@@ -1,4 +1,3 @@
-# /services/test_publisher.py
 import paho.mqtt.client as mqtt
 import time
 
