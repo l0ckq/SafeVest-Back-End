@@ -34,4 +34,4 @@ class LeituraSensorSerializer(serializers.ModelSerializer):
 class AlertaSerializer(serializers.ModelSerializer):
     class Meta:
         model = Alerta
-        fields = ['id', 'worker', 'leitura_associada', 'tipo_alerta', 'timestamp']
+        fields = ['id', 'usuario', 'leitura_associada', 'tipo_alerta', 'timestamp']

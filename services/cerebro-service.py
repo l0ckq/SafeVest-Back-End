@@ -1,12 +1,12 @@
-# /services/cerebro_service.py
 import paho.mqtt.client as mqtt
 import json
 import requests
+import os
 
-# --- CREDENCIAIS ATUALIZADAS DOS SEUS SCREENSHOTS ---
+# --- CREDENCIAIS FINAIS --- #
 BROKER_ADDRESS = "jaragua-01.lmq.cloudamqp.com"
 BROKER_PORT = 1883
-MQTT_USERNAME = "qyyguyzh:qyyguyzh"
+MQTT_USERNAME = "qyyguyzh" # <<< A CORREÇÃO ESTÁ AQUI
 MQTT_PASSWORD = "e8juWkMvJQhVSgudnSPZBS0vtj3COZuv"
 MQTT_TOPIC = "safevest/dados_sensores"
 
@@ -29,7 +29,6 @@ def on_message(client, userdata, msg):
         data = json.loads(msg.payload.decode('utf-8'))
         print(f"<- Recebido: {data}")
         
-        # 1. PREPARA E SALVA A LEITURA BRUTA
         leitura_payload = {
             "id_veste": data.get("id_veste"),
             "timestamp": data.get("timestamp"),
@@ -39,6 +38,7 @@ def on_message(client, userdata, msg):
             "nivel_co": data.get("nivel_co"),
             "nivel_bateria": data.get("nivel_bateria")
         }
+        
         print(f"   |-> Enviando para {API_LEITURAS}...")
         response = requests.post(API_LEITURAS, json=leitura_payload)
         
@@ -48,12 +48,10 @@ def on_message(client, userdata, msg):
 
         leitura_salva = response.json()
         print(f"   |-> Leitura salva no DB! (ID: {leitura_salva.get('id_leitura')})")
-
-        # 2. CALCULA O STATUS USANDO OS DADOS RECEBIDOS
+        
         status_calculado = calcularStatus(data)
         print(f"   |-> Status Calculado: {status_calculado}")
 
-        # 3. SE NECESSÁRIO, CRIA UM ALERTA
         if status_calculado in ['Alerta', 'Emergência']:
             alerta_payload = {
                 "usuario": data.get("id_usuario"),
@@ -75,7 +73,6 @@ def on_message(client, userdata, msg):
 
 def calcularStatus(worker_data):
     batimento = worker_data.get("batimento", 0)
-    # Adicione outras regras se necessário (ex: temperatura)
     if batimento > 160 or batimento < 50: return 'Emergência'
     if batimento > 120 or batimento < 60: return 'Alerta'
     return 'Seguro'

@@ -2,10 +2,9 @@
 import paho.mqtt.client as mqtt
 import time
 
-# --- ATENÇÃO: PREENCHA COM AS MESMAS CREDENCIAIS DO OUTRO ARQUIVO ---
 BROKER_ADDRESS = "jaragua-01.lmq.cloudamqp.com"
 BROKER_PORT = 1883
-MQTT_USERNAME = "qyyguyzh:qyyguyzh" # <<< VAMOS USAR A VERSÃO SIMPLES PRIMEIRO
+MQTT_USERNAME = "qyyguyzh:qyyguyzh"
 MQTT_PASSWORD = "e8juWkMvJQhVSgudnSPZBS0vtj3COZuv"
 MQTT_TOPIC = "safevest/teste"
 

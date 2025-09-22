@@ -1,12 +1,10 @@
-# /services/test_subscriber.py
 import paho.mqtt.client as mqtt
 
-# --- ATENÇÃO: PREENCHA COM AS CREDENCIAIS EXATAS DO SEU PAINEL ---
 BROKER_ADDRESS = "jaragua-01.lmq.cloudamqp.com"
 BROKER_PORT = 1883
-MQTT_USERNAME = "qyyguyzh:qyyguyzh"  # <<< VAMOS USAR A VERSÃO SIMPLES PRIMEIRO
+MQTT_USERNAME = "qyyguyzh:qyyguyzh" 
 MQTT_PASSWORD = "e8juWkMvJQhVSgudnSPZBS0vtj3COZuv"
-MQTT_TOPIC = "safevest/teste" # Um tópico de teste
+MQTT_TOPIC = "safevest/teste"
 
 def on_connect(client, userdata, flags, rc, properties):
     if rc == 0:
@@ -18,7 +16,7 @@ def on_connect(client, userdata, flags, rc, properties):
 
 def on_message(client, userdata, msg):
     print(f"\n>>> MENSAGEM RECEBIDA: {msg.payload.decode('utf-8')} <<<")
-    client.loop_stop() # Para o loop após receber a mensagem
+    client.loop_stop()
     client.disconnect()
 
 client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id="ouvinte_teste_123")
