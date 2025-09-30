@@ -42,6 +42,7 @@ INSTALLED_APPS = [
     'drf_yasg',
     'corsheaders',
     'paho.mqtt.client',
+    'django_filters'
 ]
 
 MIDDLEWARE = [

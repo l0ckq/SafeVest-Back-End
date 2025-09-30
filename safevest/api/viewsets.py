@@ -12,6 +12,7 @@ from .serializers import (
 )
 from drf_yasg.utils import swagger_auto_schema
 from safevest.api import serializers
+from django_filters.rest_framework import DjangoFilterBackend
 
 class EmpresaViewSet(viewsets.ModelViewSet):
     queryset = Empresa.objects.all()
@@ -154,7 +155,9 @@ class VesteViewSet(viewsets.ModelViewSet):
     )
     def destroy(self, request, *args, **kwargs):
         return super().destroy(request, *args, **kwargs)
-
+    
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ['numero_de_serie'] # Permite filtrar pelo número de série (serial)
 
 
 class UsoVesteViewSet(viewsets.ModelViewSet):

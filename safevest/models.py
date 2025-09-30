@@ -28,8 +28,10 @@ class Usuario(models.Model):
         return self.nome_completo
 
 class Veste(models.Model):
-    veste = models.AutoField(primary_key=True)
-    usuario = models.ForeignKey(Usuario, on_delete=models.DO_NOTHING)
+    veste = models.AutoField(primary_key=True) #id
+    numero_de_serie = models.CharField(max_length=100, unique=True)
+    usuario = models.ForeignKey(Usuario, on_delete=models.SET_NULL, null=True, blank=True)
+    numero_de_serie = models.CharField(max_length=100, unique=True, default='DEFAULT_VALUE')
 
 class UsoVeste(models.Model):
     id_uso = models.AutoField(primary_key=True)
