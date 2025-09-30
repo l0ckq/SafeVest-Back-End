@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.urls import path, include
 from safevest.api import viewsets
-from safevest.views import AlertaListCreate 
+from safevest.views import AlertaListCreate, VesteBulkCreateView
 from rest_framework import routers, permissions
 from drf_yasg import openapi
 from drf_yasg.views import get_schema_view
