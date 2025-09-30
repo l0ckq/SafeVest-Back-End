@@ -8,7 +8,6 @@ from drf_yasg.views import get_schema_view
 from django.conf import settings
 from django.conf.urls.static import static
 
-# O resto do seu arquivo, que já estava perfeito, continua igual.
 schema_view = get_schema_view(
     openapi.Info(
         title="SafeVest API",
