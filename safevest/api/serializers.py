@@ -1,7 +1,17 @@
-# /safevest/api/serializers.py (Versão Corrigida e Limpa)
-
 from rest_framework import serializers
-from safevest.models import Alerta, Empresa, Setor, Usuario, Veste, UsoVeste, LeituraSensor
+from ..models import Empresa, Setor, Profile, Veste, UsoVeste, LeituraSensor, Alerta
+from django.contrib.auth.models import User
+
+class UserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ['id', 'username', 'first_name', 'last_name', 'email']
+
+class ProfileSerializer(serializers.ModelSerializer):
+    user = UserSerializer(read_only=True)
+    class Meta:
+        model = Profile
+        fields = '__all__'
 
 class EmpresaSerializer(serializers.ModelSerializer):
     class Meta:
@@ -13,12 +23,11 @@ class SetorSerializer(serializers.ModelSerializer):
         model = Setor
         fields = '__all__'
 
-class UsuarioSerializer(serializers.ModelSerializer):
+class VesteSerializer(serializers.ModelSerializer):
+    profile = ProfileSerializer(read_only=True)
     class Meta:
-        model = Usuario
+        model = Veste
         fields = '__all__'
-
-# O VesteSerializer antigo foi REMOVIDO daqui.
 
 class UsoVesteSerializer(serializers.ModelSerializer):
     class Meta:
@@ -33,17 +42,4 @@ class LeituraSensorSerializer(serializers.ModelSerializer):
 class AlertaSerializer(serializers.ModelSerializer):
     class Meta:
         model = Alerta
-        fields = ['id', 'usuario', 'leitura_associada', 'tipo_alerta', 'timestamp']
-
-class UsuarioResumidoSerializer(serializers.ModelSerializer):
-    setor = SetorSerializer(read_only=True)
-    class Meta:
-        model = Usuario
-        fields = ['id_usuario', 'nome_completo', 'setor']
-        
-class VesteSerializer(serializers.ModelSerializer):
-    usuario = UsuarioResumidoSerializer(read_only=True, allow_null=True)
-    class Meta:
-        model = Veste
-        # Ajuste para garantir que todos os campos do modelo Veste atualizado estejam aqui
-        fields = ['id_veste', 'numero_de_serie', 'usuario']
+        fields = '__all__'
