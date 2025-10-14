@@ -1,5 +1,3 @@
-# /services/sensor_simulator.py
-
 import paho.mqtt.client as mqtt
 import time
 import json

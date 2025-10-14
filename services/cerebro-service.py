@@ -1,4 +1,3 @@
-# /services/cerebro_service.py
 import paho.mqtt.client as mqtt
 import json
 import requests
