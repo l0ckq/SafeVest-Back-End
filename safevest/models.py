@@ -1,5 +1,6 @@
 from django.db import models
-from django.contrib.auth.models import User # Importa o modelo User nativo
+from django.utils import timezone
+from django.contrib.auth.models import User # Modelo User nativo do Django
 
 class Empresa(models.Model):
     id = models.AutoField(primary_key=True)
@@ -15,16 +16,28 @@ class Setor(models.Model):
     def __str__(self): return f"{self.nome} - {self.empresa.nome_empresa}"
 
 class Profile(models.Model):
-    # Relação um-para-um com o User nativo do Django
     user = models.OneToOneField(User, on_delete=models.CASCADE, primary_key=True)
     empresa = models.ForeignKey(Empresa, on_delete=models.PROTECT, related_name="profiles")
     setor = models.ForeignKey(Setor, on_delete=models.SET_NULL, null=True, blank=True, related_name="profiles")
     ativo = models.BooleanField(default=True)
-    foto_perfil = models.ImageField(upload_to='profile_pics/', null=True, blank=True) 
-
+    foto_perfil = models.ImageField(upload_to='profile_pics/', null=True, blank=True)
+    
+    deletado = models.BooleanField(default=False)
+    deletado_em = models.DateTimeField(null=True, blank=True)
+    
     def __str__(self): 
-        # Tenta retornar o nome completo, senão o username
         return self.user.get_full_name() or self.user.username
+
+    def soft_delete(self):
+        """Método helper para soft delete"""
+        self.deletado = True
+        self.deletado_em = timezone.now()
+        self.ativo = False
+        self.save()
+        
+        # Também desativa o usuário
+        self.user.is_active = False
+        self.user.save()
 
 class Veste(models.Model):
     id = models.AutoField(primary_key=True)

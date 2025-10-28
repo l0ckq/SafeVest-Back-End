@@ -1,17 +1,18 @@
-# /safevest/api/serializers.py
-
 from rest_framework import serializers
-# Importa da pasta pai 'safevest'
 from ..models import Empresa, Setor, Profile, Veste, UsoVeste, LeituraSensor, Alerta 
+from rest_framework.decorators import api_view, permission_classes
 from django.contrib.auth.models import User
 
-# Serializer básico para o User nativo do Django
+# Serializer para o User nativo do Django
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['id', 'username', 'email', 'first_name', 'last_name']
-
-# --- Serializers Principais ---
+        
+    def validate_email(self, value):
+        if User.objects.filter(email=value).exists():
+            raise serializers.ValidationError("Já existe um usuário com este email.")
+        return value
 
 class EmpresaSerializer(serializers.ModelSerializer):
     class Meta:
@@ -31,7 +32,7 @@ class ProfileSerializer(serializers.ModelSerializer):
     empresa = EmpresaSerializer(read_only=True)
     class Meta:
         model = Profile
-        fields = '__all__' # Inclui user, empresa, setor, ativo, foto_perfil
+        fields = '__all__'
 
 # Serializer resumido, útil para aninhamentos
 class ProfileResumidoSerializer(serializers.ModelSerializer):
@@ -46,7 +47,7 @@ class VesteSerializer(serializers.ModelSerializer):
     profile = ProfileResumidoSerializer(read_only=True, allow_null=True) 
     class Meta:
         model = Veste
-        fields = '__all__' # Inclui id, numero_de_serie, profile
+        fields = '__all__'
 
 class UsoVesteSerializer(serializers.ModelSerializer):
     class Meta:
