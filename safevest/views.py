@@ -19,6 +19,8 @@ from .api.permissoes import (
     IsOperador,
 )
 
+from ..services.anonymize import anonymize_user
+
 # ==================================================
 # CLASS-BASED VIEWS (CBV)
 # ==================================================
@@ -241,15 +243,10 @@ def excluir_usuario(user, admin_profile):
         return Response({"erro": "Usuário possui vestes associadas."}, status=400)
 
     profile = user.profile
-    profile.deletado = True
-    profile.deletado_em = timezone.now()
-    profile.ativo = False
-    profile.save()
-
-    user.is_active = False
-    user.save()
-    return Response({"mensagem": "Usuário excluído com sucesso (soft delete)."})
-
+    
+    anonymize_user(user, profile)
+    
+    return Response({"mensagem": "Usuário excluído e anonimizado com sucesso (soft delete)."})
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated, (IsAdministrador | IsSupervisor)])
