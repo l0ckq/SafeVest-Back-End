@@ -17,7 +17,6 @@ from safevest.views import (
     listar_usuarios_empresa,
     usuario_detalhe,
     perfil_usuario,
-    editar_empresa,
     listar_setores_empresa,
     dashboard_estatisticas,
     upload_foto_perfil
@@ -67,7 +66,6 @@ urlpatterns = [
         path('perfil/', perfil_usuario, name='perfil-usuario'),
         
         # --- EMPRESA ---
-        path('empresa/editar/', editar_empresa, name='editar-empresa'),
         path('setores/', listar_setores_empresa, name='listar-setores'),
         
         # --- VESTES ---

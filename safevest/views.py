@@ -19,7 +19,7 @@ from .api.permissoes import (
     IsOperador,
 )
 
-from ..services.anonymize import anonymize_user
+from services.anonymize import anonymize_user
 
 # ==================================================
 # CLASS-BASED VIEWS (CBV)
@@ -104,14 +104,18 @@ class UserByEmailView(APIView):
 # FUNCTION-BASED VIEWS (FBV)
 # ==================================================
 
+from services.validators import validar_cnpj
+
 @api_view(['POST'])
 @transaction.atomic
 def signup_empresa_admin(request):
-    """Cadastro inicial de empresa + administrador"""
     data = request.data
     campos = ['nome_empresa', 'cnpj', 'nome_admin', 'email_admin', 'senha_admin']
     if any(not data.get(c) for c in campos):
         return Response({"erro": "Todos os campos são obrigatórios."}, status=400)
+
+    if not validar_cnpj(data['cnpj']): # Validação
+        return Response({"erro": "CNPJ inválido."}, status=400)
 
     if Empresa.objects.filter(cnpj=data['cnpj']).exists():
         return Response({"erro": "CNPJ já cadastrado."}, status=400)
