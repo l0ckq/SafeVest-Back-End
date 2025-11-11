@@ -104,7 +104,34 @@ class UserByEmailView(APIView):
 # FUNCTION-BASED VIEWS (FBV)
 # ==================================================
 
-from services.validators import validar_cnpj
+from services.validador_cnpj import validar_cnpj
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+
+# endpoint auxiliar para o Cérebro buscar uma veste por numero_de_serie
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def buscar_veste_por_serial(request):
+    serial = request.query_params.get('numero_de_serie', '').strip()
+    if not serial:
+        return Response({"erro": "Parâmetro 'numero_de_serie' é obrigatório."}, status=400)
+
+    try:
+        veste = Veste.objects.filter(numero_de_serie=serial).select_related('profile__user').first()
+        if not veste:
+            # devolve lista vazia para manter compatibilidade com o código do cérebro
+            return Response([], status=200)
+
+        resposta = {
+            "id_veste": veste.id,
+            # se existir profile, retorna id do user, senão None
+            "usuario": veste.profile.user.id if (hasattr(veste, 'profile') and veste.profile) else None,
+            "numero_de_serie": veste.numero_de_serie
+        }
+        return Response([resposta], status=200)
+
+    except Exception as e:
+        return Response({"erro": f"Erro ao buscar veste: {str(e)}"}, status=500)
 
 @api_view(['POST'])
 @transaction.atomic

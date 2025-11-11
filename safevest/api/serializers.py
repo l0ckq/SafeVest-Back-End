@@ -87,8 +87,7 @@ class LeituraSensorSerializer(serializers.ModelSerializer):
     class Meta:
         model = LeituraSensor
         fields = [
-            'id', 'veste', 'veste_info', 'timestamp', 'timestamp_formatado',
-            'batimento', 'temperatura_A', 'temperatura_C', 'nivel_co', 'nivel_bateria'
+            'id_veste', 'bpm', 'temp', 'humi', 'mq2'
         ]
 
 class AlertaSerializer(serializers.ModelSerializer):

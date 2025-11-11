@@ -89,7 +89,7 @@ WSGI_APPLICATION = 'setup.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'safeveste',
+        'NAME': 'safevest_dev',
         'USER': 'root',
         'PASSWORD': 'Senai@901',
         'HOST': 'localhost',
@@ -161,3 +161,10 @@ SIMPLE_JWT = {
     'BLACKLIST_AFTER_ROTATION': True,
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
+
+AUTHENTICATION_BACKENDS = [
+    'django.contrib.auth.backends.ModelBackend',  # backend padrão
+    'safevest.api.authentication_backend.EmailBackend',  # customizado (criaremos agora)
+]
+
+AUTH_USER_MODEL = 'safevest.User'
