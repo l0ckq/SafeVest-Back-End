@@ -36,7 +36,7 @@ class Profile(models.Model):
         self.deletado_em = timezone.now()
         self.ativo = False
         self.save()
-        
+
         # Também desativa o usuário
         self.user.is_active = False
         self.user.save()

@@ -24,8 +24,8 @@ API_LEITURAS_ENDPOINT = f"{API_BASE_URL}/leiturasensor/"
 API_ALERTAS_ENDPOINT = f"{API_BASE_URL}/alertas/"
 
 # Credenciais fixas para o serviço do cérebro (crie esse usuário no Django)
-SERVICE_USER = "service@safevest.io"
-SERVICE_PASS = "SENHA_FORTE_AQUI"
+SERVICE_USER = "admin@safevest.com"
+SERVICE_PASS = "admin"
 
 # =====================================================
 # AUTENTICAÇÃO AUTOMÁTICA

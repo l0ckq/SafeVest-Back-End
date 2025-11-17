@@ -56,7 +56,7 @@ try:
             "timestamp": datetime.now().isoformat(),
             "batimento": batimento,
             "temperatura_A": temp_a,
-            "temperatura_C": temp_a, # Simplificado para usar o mesmo valor
+            "temperatura_C": temp_a,
             "nivel_co": round(random.uniform(5, 20), 2),
             "nivel_bateria": round(random.uniform(80.0, 99.9), 2),
         }

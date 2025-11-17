@@ -100,7 +100,6 @@ DATABASES = {
     }
 }
 
-
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
 
@@ -163,8 +162,8 @@ SIMPLE_JWT = {
 }
 
 AUTHENTICATION_BACKENDS = [
-    'django.contrib.auth.backends.ModelBackend',  # backend padrão
-    'safevest.api.authentication_backend.EmailBackend',  # customizado (criaremos agora)
+    'safevest.api.authentication_backend.EmailBackend',
+    'django.contrib.auth.backends.ModelBackend',
 ]
 
 AUTH_USER_MODEL = 'safevest.User'
