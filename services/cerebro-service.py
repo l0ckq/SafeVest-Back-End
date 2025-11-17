@@ -1,221 +1,354 @@
-import paho.mqtt.client as mqtt
+#!/usr/bin/env python3
+# cerebro-service.py
 import json
-import requests
 import time
-from requests.exceptions import RequestException
+import requests
+import paho.mqtt.client as mqtt
+from threading import Thread, Event
 
-# =====================================================
-# CONFIGURAÇÕES DO BROKER
-# =====================================================
-BROKER_ADDRESS = "jaragua-01.lmq.cloudamqp.com"
-BROKER_PORT = 1883
-MQTT_USERNAME = "qyyguyzh:qyyguyzh"
-MQTT_PASSWORD = "e8juWkMvJQhVSgudnSPZBS0vtj3COZuv"
-MQTT_TOPIC = "safevest/dados_sensores"
+# --------------------
+# CONFIGURAÇÕES
+# --------------------
+API_BASE = "http://127.0.0.1:8000/api"
+API_LOGIN = f"{API_BASE}/token/"
+API_REFRESH = f"{API_BASE}/token/refresh/"
+API_MAPA_VESTES = f"{API_BASE}/vestes/mapa/"
+API_LEITURAS = f"{API_BASE}/leiturasensor/"
+API_ALERTAS = f"{API_BASE}/alertas/"
 
-# =====================================================
-# CONFIGURAÇÕES DA API SAFE-VEST
-# =====================================================
-API_BASE_URL = "http://127.0.0.1:8000/api"
-API_LOGIN_URL = f"{API_BASE_URL}/token/"
-API_REFRESH_URL = f"{API_BASE_URL}/token/refresh/"
-API_VESTES_ENDPOINT = f"{API_BASE_URL}/vestes/buscar/"
-API_LEITURAS_ENDPOINT = f"{API_BASE_URL}/leiturasensor/"
-API_ALERTAS_ENDPOINT = f"{API_BASE_URL}/alertas/"
-
-# Credenciais fixas para o serviço do cérebro (crie esse usuário no Django)
+# credenciais do serviço (ajuste se necessário)
 SERVICE_USER = "admin@safevest.com"
 SERVICE_PASS = "admin"
 
-# =====================================================
-# AUTENTICAÇÃO AUTOMÁTICA
-# =====================================================
+BROKER = "jaragua-01.lmq.cloudamqp.com"
+PORT = 1883
+MQTT_USER = "qyyguyzh:qyyguyzh"
+MQTT_PASS = "e8juWkMvJQhVSgudnSPZBS0vtj3COZuv"
+TOPIC = "vest"
+
+# tokens
 access_token = None
 refresh_token = None
 
-def autenticar():
-    """Faz login e obtém novo par de tokens JWT"""
-    global access_token, refresh_token
+# sinal pra encerrar threads
+stop_event = Event()
+
+# --------------------
+# LOGS simples
+# --------------------
+def log(tag, msg):
+    print(f"[{tag}] {msg}")
+
+def log_error(tag, msg):
+    print(f"[{tag} ERROR] {msg}")
+
+# --------------------
+# HELPERS HTTP
+# --------------------
+JSON_HEADERS = {"Content-Type": "application/json", "Accept": "application/json"}
+
+def try_post(url, payload, headers=None, timeout=8):
+    """Faz POST com tratamento de exceção e retorna (resp or None)."""
     try:
-        response = requests.post(API_LOGIN_URL, json={"username": SERVICE_USER, "password": SERVICE_PASS})
-        if response.ok:
-            tokens = response.json()
-            access_token = tokens.get("access")
-            refresh_token = tokens.get("refresh")
-            print("[AUTH] Novo token obtido com sucesso.")
-            return True
-        else:
-            print(f"[AUTH] Falha no login ({response.status_code}): {response.text}")
-            return False
+        r = requests.post(url, json=payload, headers=headers or JSON_HEADERS, timeout=timeout)
+        return r
     except Exception as e:
-        print(f"[AUTH] Erro ao autenticar: {e}")
+        log_error("HTTP", f"POST {url} falhou: {e}")
+        return None
+
+def try_get(url, headers=None, timeout=8):
+    try:
+        r = requests.get(url, headers=headers or JSON_HEADERS, timeout=timeout)
+        return r
+    except Exception as e:
+        log_error("HTTP", f"GET {url} falhou: {e}")
+        return None
+
+# --------------------
+# AUTENTICAÇÃO (robusta)
+# --------------------
+def autenticar_tentativas():
+    """
+    Tenta autenticar com os formatos possíveis:
+      1) {"email":..., "password":...}
+      2) {"username":..., "password":...}
+    Retorna True se ok e salva access_token/refresh_token.
+    """
+    global access_token, refresh_token
+
+    log("AUTH", "Tentando autenticar (formato email)...")
+    payload_email = {"email": SERVICE_USER, "password": SERVICE_PASS}
+    resp = try_post(API_LOGIN, payload_email)
+
+    if resp is None:
+        log_error("AUTH", "Nenhuma resposta do servidor.")
         return False
 
-def refresh():
-    """Tenta atualizar o token de acesso usando o refresh_token"""
+    # Se retornou 400 contendo 'username' significa que endpoint recebeu mas espera username
+    if resp.ok:
+        data = resp.json()
+        access_token = data.get("access")
+        refresh_token = data.get("refresh")
+        log("AUTH", "Autenticado com sucesso (email).")
+        return True
+
+    # log da resposta para debugar
+    log_error("AUTH", f"Falha (email). status={resp.status_code} body={resp.text}")
+
+    # tenta com username se o primeiro falhou
+    log("AUTH", "Tentando autenticar (formato username)...")
+    payload_username = {"username": SERVICE_USER, "password": SERVICE_PASS}
+    resp2 = try_post(API_LOGIN, payload_username)
+
+    if resp2 is None:
+        log_error("AUTH", "Nenhuma resposta do servidor (username).")
+        return False
+
+    if resp2.ok:
+        data = resp2.json()
+        access_token = data.get("access")
+        refresh_token = data.get("refresh")
+        log("AUTH", "Autenticado com sucesso (username).")
+        return True
+
+    log_error("AUTH", f"Falha (username). status={resp2.status_code} body={resp2.text}")
+
+    # última tentativa: tentar enviar AMBOS os campos (algumas views aceitam)
+    log("AUTH", "Tentando autenticar (formato combinado email+username)...")
+    payload_both = {"email": SERVICE_USER, "username": SERVICE_USER, "password": SERVICE_PASS}
+    resp3 = try_post(API_LOGIN, payload_both)
+
+    if resp3 and resp3.ok:
+        data = resp3.json()
+        access_token = data.get("access")
+        refresh_token = data.get("refresh")
+        log("AUTH", "Autenticado com sucesso (combinado).")
+        return True
+
+    if resp3:
+        log_error("AUTH", f"Falha (combinado). status={resp3.status_code} body={resp3.text}")
+
+    return False
+
+def refresh_tokens():
+    """Atualiza token usando refresh_token; se falhar tenta re-autenticar."""
     global access_token, refresh_token
     if not refresh_token:
-        print("[AUTH] Nenhum refresh_token disponível, refazendo login...")
-        return autenticar()
-    try:
-        response = requests.post(API_REFRESH_URL, json={"refresh": refresh_token})
-        if response.ok:
-            data = response.json()
-            access_token = data.get("access")
-            print("[AUTH] Token atualizado com sucesso.")
-            return True
-        else:
-            print(f"[AUTH] Refresh falhou ({response.status_code}), refazendo login...")
-            return autenticar()
-    except Exception as e:
-        print(f"[AUTH] Erro ao tentar atualizar token: {e}")
-        return autenticar()
+        log_error("AUTH", "Nenhum refresh_token disponível.")
+        return autenticar_tentativas()
+
+    log("AUTH", "Solicitando refresh de token...")
+    resp = try_post(API_REFRESH, {"refresh": refresh_token})
+    if resp is None:
+        return False
+
+    if resp.ok:
+        access_token = resp.json().get("access")
+        log("AUTH", "Refresh OK.")
+        return True
+
+    log_error("AUTH", f"Refresh falhou: status={resp.status_code} body={resp.text}")
+    return autenticar_tentativas()
 
 def get_headers():
-    """Monta headers sempre com token válido"""
     global access_token
     if not access_token:
-        autenticar()
-    return {
-        "Authorization": f"Bearer {access_token}",
-        "Content-Type": "application/json",
-        "Accept": "application/json"
-    }
+        log("AUTH", "Sem access_token, autenticando...")
+        if not autenticar_tentativas():
+            return None
+    return {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json", "Accept": "application/json"}
 
-# =====================================================
-# FUNÇÕES DE REQUISIÇÃO SEGURA
-# =====================================================
-def safe_post(url, payload, max_retries=2):
-    for attempt in range(max_retries):
-        try:
-            headers = get_headers()
-            resp = requests.post(url, json=payload, headers=headers, timeout=10)
-            if resp.status_code == 401:
-                print("[AUTH] Token expirado, atualizando...")
-                if refresh():
-                    continue
-            return resp
-        except RequestException as e:
-            print(f"[HTTP] Erro POST {url}: {e} (tentativa {attempt+1})")
-            time.sleep(1)
-    return None
+# --------------------
+# CACHE DE VESTES (thread)
+# --------------------
+vestes_cache = {}
 
-def safe_get(url, max_retries=2):
-    for attempt in range(max_retries):
-        try:
-            headers = get_headers()
-            resp = requests.get(url, headers=headers, timeout=10)
-            if resp.status_code == 401:
-                print("[AUTH] Token expirado, atualizando...")
-                if refresh():
-                    continue
-            return resp
-        except RequestException as e:
-            print(f"[HTTP] Erro GET {url}: {e} (tentativa {attempt+1})")
-            time.sleep(1)
-    return None
+def atualizar_cache_loop(poll_seconds=60):
+    """Loop que atualiza o mapa das vestes via API."""
+    global vestes_cache
+    while not stop_event.is_set():
+        log("CACHE", "Atualizando mapa das vestes...")
+        headers = get_headers()
+        if headers is None:
+            log_error("CACHE", "Não foi possível obter headers (auth). Aguardando 5s...")
+            time.sleep(5)
+            continue
 
-# =====================================================
-# LÓGICA DO CÉREBRO
-# =====================================================
-def on_connect(client, userdata, flags, rc, properties=None):
-    print(f"--- CÉREBRO CONECTADO! Resultado: {mqtt.connack_string(rc)} ---")
-    client.subscribe(MQTT_TOPIC)
-    print(f"--- OUVINDO o tópico: {MQTT_TOPIC} ---")
+        resp = try_get(API_MAPA_VESTES, headers=headers)
+        if resp is None:
+            time.sleep(poll_seconds)
+            continue
 
-def calcularStatus(data):
-    bpm = data.get("bpm", 0)
+        if resp.status_code == 401:
+            log_error("CACHE", "401 ao buscar mapa (token inválido). Tentando refresh.")
+            if refresh_tokens():
+                headers = get_headers()
+                resp = try_get(API_MAPA_VESTES, headers=headers)
+            else:
+                time.sleep(5)
+                continue
+
+        if resp.ok:
+            try:
+                novas = {}
+                for v in resp.json():
+                    # padroniza: numero_de_serie -> {id, usuario}
+                    key = v.get("numero_de_serie") or v.get("numero_de_serie", "")
+                    novas[key] = {"id": v.get("id"), "usuario": v.get("usuario")}
+                vestes_cache = novas
+                log("CACHE", f"Mapa atualizado ({len(vestes_cache)} vestes).")
+            except Exception as e:
+                log_error("CACHE", f"Erro ao montar cache: {e} body={resp.text}")
+        else:
+            log_error("CACHE", f"Erro resposta: {resp.status_code} body={resp.text}")
+
+        time.sleep(poll_seconds)
+
+# --------------------
+# LÓGICA DE PROCESSAMENTO MQTT
+# --------------------
+def calcular_status(bpm):
+    if bpm is None:
+        return "Indefinido"
     try:
         bpm = int(bpm)
-    except:
-        bpm = 0
+    except Exception:
+        return "Indefinido"
     if bpm > 160 or bpm < 50:
         return "Emergência"
     if bpm > 120 or bpm < 60:
         return "Alerta"
     return "Seguro"
 
+def on_connect(client, userdata, flags, rc, properties=None):
+    if rc == 0:
+        log("MQTT", f"Conectado ao broker (rc={rc}). Inscrevendo em '{TOPIC}'")
+        client.subscribe(TOPIC)
+    else:
+        log_error("MQTT", f"Falha ao conectar (rc={rc}).")
+
 def on_message(client, userdata, msg):
     try:
-        data = json.loads(msg.payload.decode("utf-8"))
-        print(f"<- Recebido: {data}")
-
-        serial = data.get("device_id") or data.get("numero_de_serie")
-        if not serial:
-            print("   |-> ERRO: Payload sem 'device_id', 'numero_de_serie' ou 'serial'.")
-            return
-
-        # Consulta veste
-        query_url = f"{API_VESTES_ENDPOINT}?numero_de_serie={serial}"
-        resp_veste = safe_get(query_url)
-        if not resp_veste or not resp_veste.ok:
-            print(f"   |-> ERRO ao buscar veste {serial}: {getattr(resp_veste, 'status_code', '?')} {getattr(resp_veste, 'text', '')}")
-            return
-
-        data_veste = resp_veste.json()
-        if not data_veste:
-            print(f"   |-> ERRO: Nenhuma veste encontrada para {serial}")
-            return
-
-        veste = data_veste[0]
-        id_veste = veste.get("id_veste")
-        id_usuario = veste.get("usuario")
-        if not id_usuario:
-            print(f"   |-> AVISO: Veste {serial} sem usuário vinculado.")
-            return
-
-        print(f"   |-> Veste {id_veste} vinculada ao Usuário {id_usuario}")
-
-        # Monta leitura conforme serializer
-        leitura_payload = {
-            "id_veste": id_veste,
-            "bpm": data.get("bpm"),
-            "temp": data.get("temp"),
-            "humi": data.get("humi"),
-            "mq2": data.get("mq2")
-        }
-
-        resp_leitura = safe_post(API_LEITURAS_ENDPOINT, leitura_payload)
-        if not resp_leitura or not resp_leitura.ok:
-            print(f"   |-> ERRO ao salvar leitura: {getattr(resp_leitura, 'status_code', '?')} {getattr(resp_leitura, 'text', '')}")
-            return
-
-        leitura_salva = resp_leitura.json()
-        print(f"   |-> Leitura salva com sucesso: {leitura_salva}")
-
-        status = calcularStatus(data)
-        print(f"   |-> Status calculado: {status}")
-
-        if status in ["Alerta", "Emergência"]:
-            alerta_payload = {
-                "usuario": id_usuario,
-                "leitura_associada": leitura_salva.get("id"),
-                "tipo_alerta": status
-            }
-            resp_alerta = safe_post(API_ALERTAS_ENDPOINT, alerta_payload)
-            if resp_alerta and resp_alerta.ok:
-                print(f"   |-> ALERTA '{status}' registrado com sucesso!")
-            else:
-                print(f"   |-> ERRO ao criar alerta: {getattr(resp_alerta, 'status_code', '?')} {getattr(resp_alerta, 'text', '')}")
-
+        payload = json.loads(msg.payload.decode("utf-8"))
     except Exception as e:
-        print(f"[ERRO GERAL] {e}")
+        log_error("MQTT", f"Payload inválido: {e}")
+        return
 
-# =====================================================
-# MAIN
-# =====================================================
-print("Iniciando o Cérebro do SafeVest...")
+    log("MQTT", f"Recebido: {payload}")
 
-autenticar()  # login inicial
+    serial = payload.get("device_id") or payload.get("numero_de_serie") or payload.get("serial")
+    if not serial:
+        log_error("MQTT", "Mensagem sem device_id/numero_de_serie/serial.")
+        return
 
-client = mqtt.Client(client_id="cerebro_service_main")
-client.username_pw_set(MQTT_USERNAME, MQTT_PASSWORD)
-client.on_connect = on_connect
-client.on_message = on_message
+    if serial not in vestes_cache:
+        log_error("MQTT", f"Serial '{serial}' não encontrada no cache.")
+        return
 
-try:
-    print("Tentando conectar ao Broker MQTT...")
-    client.connect(BROKER_ADDRESS, BROKER_PORT)
-    client.loop_forever()
-except Exception as e:
-    print(f"Falha ao conectar ao broker: {e}")
+    meta = vestes_cache[serial]
+    id_veste = meta.get("id")
+    id_usuario = meta.get("usuario")
+
+    leitura_payload = {
+        "veste": id_veste,
+        "bpm": payload.get("bpm"),
+        "temp": payload.get("temp"),
+        "humi": payload.get("humi"),
+        "mq2": payload.get("mq2")
+    }
+
+    headers = get_headers()
+    if headers is None:
+        log_error("MQTT", "Sem headers (auth) para enviar leitura.")
+        return
+
+    resp = try_post(API_LEITURAS, leitura_payload, headers=headers)
+    if resp is None:
+        return
+
+    if resp.status_code == 401:
+        log_error("MQTT", "401 ao salvar leitura. Tentar refresh e reenviar.")
+        if refresh_tokens():
+            headers = get_headers()
+            resp = try_post(API_LEITURAS, leitura_payload, headers=headers)
+        else:
+            return
+
+    if not resp.ok:
+        log_error("MQTT", f"Falha ao salvar leitura: {resp.status_code} {resp.text}")
+        return
+
+    leitura_obj = resp.json()
+    leitura_id = leitura_obj.get("id") or leitura_obj.get("pk")
+    log("MQTT", f"Leitura salva (id={leitura_id})")
+
+    status = calcular_status(payload.get("bpm"))
+    log("MQTT", f"Status calculado: {status}")
+
+    if status in ("Alerta", "Emergência"):
+        if not id_usuario:
+            log("MQTT", "Veste sem usuário — alerta ignorado.")
+            return
+
+        alerta_payload = {
+            "profile": id_usuario,
+            "leitura_associada": leitura_id,
+            "tipo_alerta": status
+        }
+        resp_alert = try_post(API_ALERTAS, alerta_payload, headers=headers)
+        if resp_alert is None:
+            return
+        if resp_alert.status_code == 401:
+            log_error("ALERTA", "401 ao criar alerta — tentando refresh.")
+            if refresh_tokens():
+                headers = get_headers()
+                resp_alert = try_post(API_ALERTAS, alerta_payload, headers=headers)
+        if resp_alert.ok:
+            log("ALERTA", f"Alerta '{status}' criado para profile {id_usuario}.")
+        else:
+            log_error("ALERTA", f"Falha ao criar alerta: {resp_alert.status_code} {resp_alert.text}")
+
+# --------------------
+# STARTUP
+# --------------------
+def main():
+    log("SYSTEM", "Iniciando Cérebro SafeVest")
+
+    ok = autenticar_tentativas()
+    if not ok:
+        log_error("AUTH", "Não foi possível autenticar em nenhum formato. Vou mostrar recomendações:")
+        log("AUTH", "  - Verifique se EMAIL/SENHA SERVICE_USER estão corretos.")
+        log("AUTH", "  - Verifique se /api/token/ está mapeado para EmailTokenObtainPairView.")
+        log("AUTH", "  - Teste com curl/postman:")
+        log("AUTH", f"    curl -X POST {API_LOGIN} -H 'Content-Type: application/json' -d '{{\"email\":\"{SERVICE_USER}\",\"password\":\"{SERVICE_PASS}\"}}'")
+        return
+
+    # iniciar thread de cache
+    t = Thread(target=atualizar_cache_loop, daemon=True)
+    t.start()
+
+    client = mqtt.Client(
+        client_id="cerebro_service",
+        callback_api_version=mqtt.CallbackAPIVersion.VERSION2
+    )
+    client.username_pw_set(MQTT_USER, MQTT_PASS)
+    client.on_connect = on_connect
+    client.on_message = on_message
+
+    log("MQTT", f"Tentando conectar ao broker {BROKER}:{PORT} ...")
+    try:
+        client.connect(BROKER, PORT)
+    except Exception as e:
+        log_error("MQTT", f"Falha ao conectar ao broker: {e}")
+        stop_event.set()
+        return
+
+    try:
+        client.loop_forever()
+    except KeyboardInterrupt:
+        log("SYSTEM", "Recebido KeyboardInterrupt; encerrando...")
+        stop_event.set()
+        client.disconnect()
+
+if __name__ == "__main__":
+    main()

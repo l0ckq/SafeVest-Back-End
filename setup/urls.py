@@ -1,10 +1,13 @@
 from django.contrib import admin
 from django.urls import path, include
+from rest_framework.response import Response
 from rest_framework import routers, permissions
 from rest_framework_simplejwt.views import TokenRefreshView
 from safevest.api.authentication import EmailTokenObtainPairView
 from drf_yasg.views import get_schema_view
 from drf_yasg import openapi
+
+from safevest.models import Veste
 
 from safevest.api import viewsets
 from safevest.views import (
@@ -13,6 +16,7 @@ from safevest.views import (
     UserByEmailView,
     OnboardingView,
     buscar_veste_por_serial,
+    mapa_vestes,
     signup_empresa_admin,
     criar_usuario_colaborador,
     listar_usuarios_empresa,
@@ -69,6 +73,7 @@ api_patterns = [
     # --- VESTES ---
     path('vestes/bulk-create/', VesteBulkCreateView.as_view(), name='veste-bulk-create'),
     path('vestes/buscar/', buscar_veste_por_serial, name='buscar-veste'),
+    path("vestes/mapa/", mapa_vestes),
 
     # --- DASHBOARD / UTILITÁRIOS ---
     path('dashboard/', dashboard_estatisticas, name='dashboard'),

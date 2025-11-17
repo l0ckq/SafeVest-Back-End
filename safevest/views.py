@@ -378,3 +378,19 @@ def perfil_usuario(request):
         "ativo": profile.ativo,
         "foto_perfil": profile.foto_perfil.url if profile.foto_perfil else None
     })
+
+@api_view(["GET"])
+def mapa_vestes(request):
+    from safevest.models import Veste
+    vestes = Veste.objects.all()
+
+    data = [
+        {
+            "id": v.id,
+            "numero_de_serie": v.numero_de_serie,
+            "usuario": v.usuario.id if v.usuario else None
+        }
+        for v in vestes
+    ]
+
+    return Response(data)

@@ -39,12 +39,13 @@ class ProfileSerializer(serializers.ModelSerializer):
     empresa = EmpresaSerializer(read_only=True)
     nome_usuario = serializers.CharField(source='user.get_full_name', read_only=True)
     email_usuario = serializers.EmailField(source='user.email', read_only=True)
-    
+
     class Meta:
         model = Profile
         fields = [
-            'user', 'empresa', 'setor', 'ativo', 'foto_perfil', 
-            'deletado', 'deletado_em', 'nome_usuario', 'email_usuario'
+            'user', 'empresa', 'setor', 'role',
+            'deletado', 'deletado_em',
+            'nome_usuario', 'email_usuario'
         ]
         read_only_fields = ['deletado', 'deletado_em']
 
@@ -84,11 +85,16 @@ class UsoVesteSerializer(serializers.ModelSerializer):
 class LeituraSensorSerializer(serializers.ModelSerializer):
     veste_info = serializers.CharField(source='veste.numero_de_serie', read_only=True)
     timestamp_formatado = serializers.DateTimeField(source='timestamp', format="%d/%m/%Y %H:%M", read_only=True)
-    
+
     class Meta:
         model = LeituraSensor
         fields = [
-            'id_veste', 'bpm', 'temp', 'humi', 'mq2'
+            'veste',
+            'bpm',
+            'temp',
+            'humi',
+            'mq2',
+            'timestamp_formatado',
         ]
 
 class AlertaSerializer(serializers.ModelSerializer):
@@ -105,16 +111,31 @@ class AlertaSerializer(serializers.ModelSerializer):
 # Serializer para criação de usuário
 class UserCreateSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, min_length=8)
-    
+    role = serializers.ChoiceField(choices=Profile.ROLE_CHOICES)
+    empresa_id = serializers.IntegerField()
+    setor_id = serializers.IntegerField(required=False, allow_null=True)
+
     class Meta:
         model = User
-        fields = ['email', 'first_name', 'last_name', 'password']
-    
-        def create(self, validated_data):
-            user = User.objects.create_user(
-                email=validated_data['email'],
-                password=validated_data['password'],
-                first_name=validated_data.get('first_name', ''),
-                last_name=validated_data.get('last_name', '')
-            )
-            return user
+        fields = ['email', 'first_name', 'last_name', 'password', 'role', 'empresa_id', 'setor_id']
+
+    def create(self, validated_data):
+        role = validated_data.pop('role')
+        empresa_id = validated_data.pop('empresa_id')
+        setor_id = validated_data.pop('setor_id', None)
+
+        user = User.objects.create_user(
+            email=validated_data['email'],
+            password=validated_data['password'],
+            first_name=validated_data.get('first_name', ''),
+            last_name=validated_data.get('last_name', '')
+        )
+
+        Profile.objects.create(
+            user=user,
+            empresa_id=empresa_id,
+            setor_id=setor_id,
+            role=role
+        )
+
+        return user
