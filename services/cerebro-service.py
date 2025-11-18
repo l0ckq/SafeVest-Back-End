@@ -1,194 +1,221 @@
 import paho.mqtt.client as mqtt
-import time
 import json
-import random
-from datetime import datetime
+import requests
+import time
+from requests.exceptions import RequestException
 
-# --------------------
-# CONFIGURAÇÕES
-# --------------------
+# =====================================================
+# CONFIGURAÇÕES DO BROKER
+# =====================================================
 BROKER_ADDRESS = "jaragua-01.lmq.cloudamqp.com"
 BROKER_PORT = 1883
 MQTT_USERNAME = "qyyguyzh:qyyguyzh"
 MQTT_PASSWORD = "e8juWkMvJQhVSgudnSPZBS0vtj3COZuv"
-MQTT_TOPIC = "vest"
+MQTT_TOPIC = "safevest/dados_sensores"
 
-# Vestes simuladas (devem estar cadastradas no Django!)
-VESTES_EM_OPERACAO = [
-    "SV-DEMO-01",
-    "SV-DEMO-02",
-    "SV-DEMO-03",
-]
+# =====================================================
+# CONFIGURAÇÕES DA API SAFE-VEST
+# =====================================================
+API_BASE_URL = "http://127.0.0.1:8000/api"
+API_LOGIN_URL = f"{API_BASE_URL}/token/"
+API_REFRESH_URL = f"{API_BASE_URL}/token/refresh/"
+API_VESTES_ENDPOINT = f"{API_BASE_URL}/vestes/buscar/"
+API_LEITURAS_ENDPOINT = f"{API_BASE_URL}/leiturasensor/"
+API_ALERTAS_ENDPOINT = f"{API_BASE_URL}/alertas/"
 
-INTERVALO_ENVIO = 5  # segundos entre cada envio
+# Credenciais fixas para o serviço do cérebro (crie esse usuário no Django)
+SERVICE_USER = "admin@safevest.com"
+SERVICE_PASS = "admin"
 
-# --------------------
-# LOGS
-# --------------------
-def log(msg, nivel="INFO"):
-    timestamp = datetime.now().strftime("%H:%M:%S")
-    cores = {"INFO": "\033[94m", "OK": "\033[92m", "WARN": "\033[93m", "ERROR": "\033[91m"}
-    reset = "\033[0m"
-    print(f"{cores.get(nivel, '')}{timestamp} {msg}{reset}")
+# =====================================================
+# AUTENTICAÇÃO AUTOMÁTICA
+# =====================================================
+access_token = None
+refresh_token = None
 
-# --------------------
-# CALLBACKS MQTT
-# --------------------
-conectado = False
-mensagens_enviadas = 0
-
-def on_connect(client, userdata, flags, rc, properties=None):
-    global conectado
-    if rc == 0:
-        conectado = True
-        log("✓ Conectado ao broker MQTT!", "OK")
-        log(f"🎯 Publicando no tópico: '{MQTT_TOPIC}'", "OK")
-    else:
-        log(f"❌ Falha ao conectar (código {rc})", "ERROR")
-
-def on_publish(client, userdata, mid, reason_code=None, properties=None):
-    global mensagens_enviadas
-    mensagens_enviadas += 1
-
-def on_disconnect(client, userdata, flags, rc, properties=None):
-    global conectado
-    conectado = False
-    if rc != 0:
-        log(f"⚠️  Desconectado inesperadamente (rc={rc})", "WARN")
-
-# --------------------
-# GERAÇÃO DE DADOS
-# --------------------
-def gerar_dados_normais():
-    """Gera dados de sinais vitais normais"""
-    return {
-        "bpm": random.randint(70, 110),
-        "temp": round(random.uniform(36.1, 37.2), 2),
-        "humi": round(random.uniform(40.0, 60.0), 2),
-        "mq2": round(random.uniform(0.5, 1.5), 2)
-    }
-
-def gerar_dados_anormais():
-    """Gera dados que devem disparar alertas"""
-    tipo = random.choice(["alerta", "emergencia"])
-    
-    if tipo == "alerta":
-        # BPM entre 121-160 ou 50-59 (Alerta)
-        bpm = random.choice([
-            random.randint(121, 160),
-            random.randint(50, 59)
-        ])
-        temp = round(random.uniform(37.3, 37.9), 2)
-    else:
-        # BPM > 160 ou < 50 (Emergência)
-        bpm = random.choice([
-            random.randint(161, 180),
-            random.randint(40, 49)
-        ])
-        temp = round(random.uniform(38.0, 39.5), 2)
-    
-    return {
-        "bpm": bpm,
-        "temp": temp,
-        "humi": round(random.uniform(30.0, 70.0), 2),
-        "mq2": round(random.uniform(1.6, 3.0), 2)
-    }
-
-# --------------------
-# MAIN
-# --------------------
-def main():
-    print("\n" + "="*60)
-    log("🔬 Simulador de Sensores SafeVest")
-    print("="*60 + "\n")
-    
-    log(f"Vestes em operação: {', '.join(VESTES_EM_OPERACAO)}")
-    log(f"Intervalo de envio: {INTERVALO_ENVIO}s")
-    log(f"Broker: {BROKER_ADDRESS}:{BROKER_PORT}")
-    log(f"Tópico: {MQTT_TOPIC}\n")
-    
-    # Cria cliente MQTT
-    client = mqtt.Client(
-        client_id="sensor_simulador_safevest",
-        callback_api_version=mqtt.CallbackAPIVersion.VERSION2
-    )
-    
-    client.username_pw_set(MQTT_USERNAME, MQTT_PASSWORD)
-    client.on_connect = on_connect
-    client.on_publish = on_publish
-    client.on_disconnect = on_disconnect
-    
-    # Conecta ao broker
-    log("Conectando ao broker...")
+def autenticar():
+    """Faz login e obtém novo par de tokens JWT"""
+    global access_token, refresh_token
     try:
-        client.connect(BROKER_ADDRESS, BROKER_PORT)
-        client.loop_start()
+        response = requests.post(API_LOGIN_URL, json={"username": SERVICE_USER, "password": SERVICE_PASS})
+        if response.ok:
+            tokens = response.json()
+            access_token = tokens.get("access")
+            refresh_token = tokens.get("refresh")
+            print("[AUTH] Novo token obtido com sucesso.")
+            return True
+        else:
+            print(f"[AUTH] Falha no login ({response.status_code}): {response.text}")
+            return False
     except Exception as e:
-        log(f"❌ Erro ao conectar: {e}", "ERROR")
-        return
-    
-    # Aguarda conexão
-    tentativas = 0
-    while not conectado and tentativas < 10:
-        time.sleep(0.5)
-        tentativas += 1
-    
-    if not conectado:
-        log("❌ Não foi possível conectar após 5s", "ERROR")
-        return
-    
-    print("="*60)
-    log("✓ Sistema operacional! Iniciando envio de dados...", "OK")
-    log("⚠️  ATENÇÃO: Certifique-se que estas vestes estão cadastradas no Django!", "WARN")
-    print("="*60 + "\n")
-    
-    # Loop principal
-    try:
-        ciclo = 0
-        while True:
-            ciclo += 1
-            serial_selecionado = random.choice(VESTES_EM_OPERACAO)
-            
-            # 15% de chance de gerar dados anormais
-            if random.random() < 0.15:
-                dados = gerar_dados_anormais()
-                status_emoji = "🚨"
-                status_texto = "ANORMAL"
-            else:
-                dados = gerar_dados_normais()
-                status_emoji = "💚"
-                status_texto = "NORMAL"
-            
-            # Monta payload
-            payload = {
-                "device_id": serial_selecionado,
-                "bpm": dados["bpm"],
-                "temp": dados["temp"],
-                "humi": dados["humi"],
-                "mq2": dados["mq2"]
-            }
-            
-            payload_json = json.dumps(payload)
-            
-            # Publica no broker
-            result = client.publish(MQTT_TOPIC, payload_json)
-            
-            if result.rc == mqtt.MQTT_ERR_SUCCESS:
-                log(f"{status_emoji} Ciclo #{ciclo} | {serial_selecionado} | {status_texto}")
-                log(f"   📊 BPM: {dados['bpm']} | TEMP: {dados['temp']}°C | HUMI: {dados['humi']}% | MQ2: {dados['mq2']}")
-                log(f"   ✓ Publicado ({mensagens_enviadas} msgs enviadas)\n")
-            else:
-                log(f"❌ Falha ao publicar (rc={result.rc})", "ERROR")
-            
-            time.sleep(INTERVALO_ENVIO)
-            
-    except KeyboardInterrupt:
-        print("\n" + "="*60)
-        log("👋 Simulador encerrado pelo usuário")
-        log(f"📊 Total de mensagens enviadas: {mensagens_enviadas}", "OK")
-        print("="*60)
-        client.loop_stop()
-        client.disconnect()
+        print(f"[AUTH] Erro ao autenticar: {e}")
+        return False
 
-if __name__ == "__main__":
-    main()
+def refresh():
+    """Tenta atualizar o token de acesso usando o refresh_token"""
+    global access_token, refresh_token
+    if not refresh_token:
+        print("[AUTH] Nenhum refresh_token disponível, refazendo login...")
+        return autenticar()
+    try:
+        response = requests.post(API_REFRESH_URL, json={"refresh": refresh_token})
+        if response.ok:
+            data = response.json()
+            access_token = data.get("access")
+            print("[AUTH] Token atualizado com sucesso.")
+            return True
+        else:
+            print(f"[AUTH] Refresh falhou ({response.status_code}), refazendo login...")
+            return autenticar()
+    except Exception as e:
+        print(f"[AUTH] Erro ao tentar atualizar token: {e}")
+        return autenticar()
+
+def get_headers():
+    """Monta headers sempre com token válido"""
+    global access_token
+    if not access_token:
+        autenticar()
+    return {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+    }
+
+# =====================================================
+# FUNÇÕES DE REQUISIÇÃO SEGURA
+# =====================================================
+def safe_post(url, payload, max_retries=2):
+    for attempt in range(max_retries):
+        try:
+            headers = get_headers()
+            resp = requests.post(url, json=payload, headers=headers, timeout=10)
+            if resp.status_code == 401:
+                print("[AUTH] Token expirado, atualizando...")
+                if refresh():
+                    continue
+            return resp
+        except RequestException as e:
+            print(f"[HTTP] Erro POST {url}: {e} (tentativa {attempt+1})")
+            time.sleep(1)
+    return None
+
+def safe_get(url, max_retries=2):
+    for attempt in range(max_retries):
+        try:
+            headers = get_headers()
+            resp = requests.get(url, headers=headers, timeout=10)
+            if resp.status_code == 401:
+                print("[AUTH] Token expirado, atualizando...")
+                if refresh():
+                    continue
+            return resp
+        except RequestException as e:
+            print(f"[HTTP] Erro GET {url}: {e} (tentativa {attempt+1})")
+            time.sleep(1)
+    return None
+
+# =====================================================
+# LÓGICA DO CÉREBRO
+# =====================================================
+def on_connect(client, userdata, flags, rc, properties=None):
+    print(f"--- CÉREBRO CONECTADO! Resultado: {mqtt.connack_string(rc)} ---")
+    client.subscribe(MQTT_TOPIC)
+    print(f"--- OUVINDO o tópico: {MQTT_TOPIC} ---")
+
+def calcularStatus(data):
+    bpm = data.get("bpm", 0)
+    try:
+        bpm = int(bpm)
+    except:
+        bpm = 0
+    if bpm > 160 or bpm < 50:
+        return "Emergência"
+    if bpm > 120 or bpm < 60:
+        return "Alerta"
+    return "Seguro"
+
+def on_message(client, userdata, msg):
+    try:
+        data = json.loads(msg.payload.decode("utf-8"))
+        print(f"<- Recebido: {data}")
+
+        serial = data.get("device_id") or data.get("numero_de_serie")
+        if not serial:
+            print("   |-> ERRO: Payload sem 'device_id', 'numero_de_serie' ou 'serial'.")
+            return
+
+        # Consulta veste
+        query_url = f"{API_VESTES_ENDPOINT}?numero_de_serie={serial}"
+        resp_veste = safe_get(query_url)
+        if not resp_veste or not resp_veste.ok:
+            print(f"   |-> ERRO ao buscar veste {serial}: {getattr(resp_veste, 'status_code', '?')} {getattr(resp_veste, 'text', '')}")
+            return
+
+        data_veste = resp_veste.json()
+        if not data_veste:
+            print(f"   |-> ERRO: Nenhuma veste encontrada para {serial}")
+            return
+
+        veste = data_veste[0]
+        id_veste = veste.get("id_veste")
+        id_usuario = veste.get("usuario")
+        if not id_usuario:
+            print(f"   |-> AVISO: Veste {serial} sem usuário vinculado.")
+            return
+
+        print(f"   |-> Veste {id_veste} vinculada ao Usuário {id_usuario}")
+
+        # Monta leitura conforme serializer
+        leitura_payload = {
+            "id_veste": id_veste,
+            "bpm": data.get("bpm"),
+            "temp": data.get("temp"),
+            "humi": data.get("humi"),
+            "mq2": data.get("mq2")
+        }
+
+        resp_leitura = safe_post(API_LEITURAS_ENDPOINT, leitura_payload)
+        if not resp_leitura or not resp_leitura.ok:
+            print(f"   |-> ERRO ao salvar leitura: {getattr(resp_leitura, 'status_code', '?')} {getattr(resp_leitura, 'text', '')}")
+            return
+
+        leitura_salva = resp_leitura.json()
+        print(f"   |-> Leitura salva com sucesso: {leitura_salva}")
+
+        status = calcularStatus(data)
+        print(f"   |-> Status calculado: {status}")
+
+        if status in ["Alerta", "Emergência"]:
+            alerta_payload = {
+                "usuario": id_usuario,
+                "leitura_associada": leitura_salva.get("id"),
+                "tipo_alerta": status
+            }
+            resp_alerta = safe_post(API_ALERTAS_ENDPOINT, alerta_payload)
+            if resp_alerta and resp_alerta.ok:
+                print(f"   |-> ALERTA '{status}' registrado com sucesso!")
+            else:
+                print(f"   |-> ERRO ao criar alerta: {getattr(resp_alerta, 'status_code', '?')} {getattr(resp_alerta, 'text', '')}")
+
+    except Exception as e:
+        print(f"[ERRO GERAL] {e}")
+
+# =====================================================
+# MAIN
+# =====================================================
+print("Iniciando o Cérebro do SafeVest...")
+
+autenticar()  # login inicial
+
+client = mqtt.Client(client_id="cerebro_service_main")
+client.username_pw_set(MQTT_USERNAME, MQTT_PASSWORD)
+client.on_connect = on_connect
+client.on_message = on_message
+
+try:
+    print("Tentando conectar ao Broker MQTT...")
+    client.connect(BROKER_ADDRESS, BROKER_PORT)
+    client.loop_forever()
+except Exception as e:
+    print(f"Falha ao conectar ao broker: {e}")

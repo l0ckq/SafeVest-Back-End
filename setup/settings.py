@@ -166,8 +166,4 @@ AUTHENTICATION_BACKENDS = [
     'django.contrib.auth.backends.ModelBackend',
 ]
 
-AUTH_USER_MODEL = "safevest.User"
-
-REST_AUTH = {
-    'USE_JWT': True,
-}
+AUTH_USER_MODEL = 'safevest.User'
