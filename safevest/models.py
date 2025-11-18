@@ -11,16 +11,9 @@ class Empresa(models.Model):
     criado_em = models.DateTimeField(auto_now_add=True)
     def __str__(self): return self.nome_empresa
 
-class Setor(models.Model):
-    id = models.AutoField(primary_key=True)
-    empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, related_name="setores")
-    nome = models.CharField(max_length=200)
-    def __str__(self): return f"{self.nome} - {self.empresa.nome_empresa}"
-
 class Profile(models.Model):
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     empresa = models.ForeignKey(Empresa, on_delete=models.PROTECT, related_name="profiles")
-    setor = models.ForeignKey(Setor, on_delete=models.SET_NULL, null=True, blank=True, related_name="profiles")
     ativo = models.BooleanField(default=True)
     foto_perfil = models.ImageField(upload_to='profile_pics/', null=True, blank=True)
     
@@ -28,7 +21,10 @@ class Profile(models.Model):
     deletado_em = models.DateTimeField(null=True, blank=True)
     
     def __str__(self): 
-        return self.user.get_full_name() or self.user.username
+        full_name = self.user.get_full_name()
+        if full_name and full_name.strip():
+            return full_name
+        return self.user.email
 
     def soft_delete(self):
         """Método helper para soft delete"""
@@ -78,7 +74,11 @@ class Alerta(models.Model):
     leitura_associada = models.ForeignKey(LeituraSensor, on_delete=models.CASCADE) 
     tipo_alerta = models.CharField(max_length=20, choices=TIPO_ALERTA_CHOICES)
     timestamp = models.DateTimeField(auto_now_add=True)
-    def __str__(self): return f"{self.tipo_alerta} para {self.profile.user.username}"
+    
+    def __str__(self):
+        full_name = self.profile.user.get_full_name()
+        user_identifier = full_name if full_name and full_name.strip() else self.profile.user.email
+        return f"{self.tipo_alerta} para {user_identifier}"
     
 class UserManager(BaseUserManager):
     use_in_migrations = True

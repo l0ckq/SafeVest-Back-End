@@ -13,10 +13,9 @@ from django.db import transaction, IntegrityError
 from rest_framework.permissions import IsAuthenticated
 from django.db.models import Q
 
-from .models import Alerta, Veste, Empresa, Profile, Setor
+from .models import Alerta, Veste, Empresa, Profile
 from .api import serializers
 
-# Permissões específicas por cargo
 from .api.permissoes import (
     IsAdministrador,
     IsSupervisor,
@@ -87,7 +86,7 @@ class UserByEmailView(APIView):
         user = (
             User.objects
             .filter(Q(email=email) | Q(username=email), profile__empresa=empresa_user, profile__deletado=False)
-            .select_related("profile__empresa", "profile__setor")
+            .select_related("profile__empresa")
             .first()
         )
         if not user:
@@ -100,7 +99,6 @@ class UserByEmailView(APIView):
             "first_name": user.first_name,
             "email": user.email,
             "empresa": profile.empresa.nome_empresa,
-            "setor": profile.setor.nome if profile.setor else None,
             "groups": [g.name for g in user.groups.all()]
         })
 
@@ -155,7 +153,6 @@ def signup_empresa_admin(request):
 
     try:
         empresa = Empresa.objects.create(nome_empresa=data['nome_empresa'], cnpj=data['cnpj'])
-        setor_admin = Setor.objects.create(empresa=empresa, nome="Administração")
 
         user = User.objects.create_user(
             username=data['email_admin'],
@@ -166,7 +163,7 @@ def signup_empresa_admin(request):
         grupo, _ = Group.objects.get_or_create(name='Administrador')
         user.groups.add(grupo)
 
-        Profile.objects.create(user=user, empresa=empresa, setor=setor_admin)
+        Profile.objects.create(user=user, empresa=empresa)
         return Response({"mensagem": "Empresa e admin criados com sucesso!"}, status=201)
 
     except Exception as e:
@@ -174,34 +171,55 @@ def signup_empresa_admin(request):
 
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated, IsAdministrador])
-@transaction.atomic
+@permission_classes([IsAuthenticated])
 def criar_usuario_colaborador(request):
-    """Criação de usuários comuns (apenas administradores)"""
     data = request.data
-    campos = ['nome_completo', 'email', 'funcao', 'password']
-    if any(not data.get(c) for c in campos):
-        return Response({"erro": "Preencha todos os campos obrigatórios."}, status=400)
+    
+    # Extração de dados do JSON
+    email = data.get('email')
+    password = data.get('password')
+    first_name = data.get('first_name', '')
+    last_name = data.get('last_name', '')
+    grupo_nome = data.get('grupo')
 
-    empresa = request.user.profile.empresa
-    setor = Setor.objects.filter(empresa=empresa).first() or Setor.objects.create(empresa=empresa, nome="Geral")
+    # Validações
+    if not email or not password or not grupo_nome:
+        return Response({"erro": "Email, senha e função são obrigatórios."}, status=status.HTTP_400_BAD_REQUEST)
 
-    if User.objects.filter(email=data['email']).exists():
-        return Response({"erro": "Email já cadastrado."}, status=400)
+    try:
+        try:
+            grupo_obj = Group.objects.get(name=grupo_nome)
+        except Group.DoesNotExist:
+            return Response({"erro": f"A função '{grupo_nome}' não existe no sistema."}, status=status.HTTP_400_BAD_REQUEST)
 
-    user = User.objects.create_user(
-        username=data['email'],
-        email=data['email'],
-        password=data['password'],
-        first_name=data['nome_completo']
-    )
+        if User.objects.filter(email=email).exists():
+            return Response({"erro": "Este email já está cadastrado."}, status=status.HTTP_400_BAD_REQUEST)
 
-    grupo, _ = Group.objects.get_or_create(name=data['funcao'])
-    user.groups.add(grupo)
+        user = User.objects.create_user(
+            email=email, 
+            password=password,
+            first_name=first_name,
+            last_name=last_name
+        )
+        # ---------------------------
 
-    Profile.objects.create(user=user, empresa=empresa, setor=setor)
-    return Response({"mensagem": "Usuário criado com sucesso!"}, status=201)
+        # Adiciona ao Grupo
+        user.groups.add(grupo_obj)
 
+        # Cria o Profile
+        admin_profile = request.user.profile
+        Profile.objects.create(
+            user=user,
+            empresa=admin_profile.empresa,
+            ativo=True
+        )
+
+        return Response({"mensagem": "Usuário criado com sucesso!"}, status=status.HTTP_201_CREATED)
+
+    except Exception as e:
+        if 'user' in locals():
+            user.delete()
+        return Response({"erro": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET', 'PUT', 'DELETE'])
 @permission_classes([IsAuthenticated, IsAdministrador])
@@ -223,7 +241,6 @@ def usuario_detalhe(request, user_id):
                 "nome": user.first_name,
                 "email": user.email,
                 "funcao": user.groups.first().name if user.groups.exists() else "Sem grupo",
-                "setor": profile.setor.nome if profile.setor else None
             })
 
         elif request.method == 'PUT':
@@ -237,13 +254,6 @@ def usuario_detalhe(request, user_id):
             if 'nome' in data:
                 user.first_name = data['nome']
             user.save()
-
-            if 'setor_id' in data:
-                try:
-                    setor = Setor.objects.get(id=data['setor_id'], empresa=admin_profile.empresa)
-                    profile.setor = setor
-                except Setor.DoesNotExist:
-                    return Response({"erro": "Setor inválido."}, status=400)
 
             if 'funcao' in data:
                 user.groups.clear()
@@ -284,27 +294,45 @@ def excluir_usuario(user, admin_profile):
     return Response({"mensagem": "Usuário excluído e anonimizado com sucesso (soft delete)."})
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated, (IsAdministrador | IsSupervisor)])
+@permission_classes([IsAuthenticated]) # Pode manter assim por enquanto para não dar erro de permissão
 def listar_usuarios_empresa(request):
-    """Listar usuários ativos da mesma empresa"""
-    empresa = request.user.profile.empresa
-    usuarios = Profile.objects.filter(empresa=empresa, deletado=False).select_related('user', 'setor')
+    """Listar todos os usuários da empresa (ativos e inativos)"""
+    
+    try:
+        # Pega a empresa do admin logado
+        empresa = request.user.profile.empresa
+        
+        # Filtra profiles da empresa que NÃO foram 'soft deleted'
+        # Usamos select_related para deixar o banco de dados mais rápido
+        profiles = empresa.profiles.filter(deletado=False).select_related('user')
 
-    data = []
-    for p in usuarios:
-        if not p.user.is_active:
-            continue
-        data.append({
-            "id": p.user.id,
-            "nome": p.user.first_name,
-            "email": p.user.email,
-            "funcao": p.user.groups.first().name if p.user.groups.exists() else "Sem grupo",
-            "setor": p.setor.nome if p.setor else None,
-            "ativo": p.ativo
-        })
+        data = []
+        for p in profiles:
+            user = p.user
+            
+            # Lógica inteligente de nome (Nome Completo ou Email)
+            nome_exibicao = user.get_full_name()
+            if not nome_exibicao:
+                nome_exibicao = user.email # Fallback
 
-    return Response({"empresa": empresa.nome_empresa, "usuarios": data})
+            # Pega o nome do grupo (Função)
+            funcao = "Sem função"
+            if user.groups.exists():
+                funcao = user.groups.first().name
+            
+            data.append({
+                "id": user.id,
+                "nome": nome_exibicao,
+                "email": user.email,
+                "funcao": funcao,
+                "ativo": p.ativo
+            })
 
+        # Retorna no formato que seu JS espera: data.usuarios
+        return Response({"usuarios": data})
+
+    except Exception as e:
+        return Response({"erro": str(e)}, status=400)
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated, (IsAdministrador | IsSupervisor)])
@@ -329,16 +357,6 @@ def dashboard_estatisticas(request):
         "alertas_7_dias": alertas_semana
     })
 
-
-@api_view(['GET'])
-@permission_classes([IsAuthenticated])
-def listar_setores_empresa(request):
-    """Listar setores da empresa"""
-    empresa = request.user.profile.empresa
-    setores = Setor.objects.filter(empresa=empresa).values('id', 'nome')
-    return Response({"empresa": empresa.nome_empresa, "setores": list(setores)})
-
-
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def upload_foto_perfil(request):
@@ -360,7 +378,6 @@ def upload_foto_perfil(request):
         "foto_url": user_profile.foto_perfil.url
     })
 
-
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def perfil_usuario(request):
@@ -374,7 +391,6 @@ def perfil_usuario(request):
         "email": user.email,
         "funcao": user.groups.first().name if user.groups.exists() else "Sem grupo",
         "empresa": profile.empresa.nome_empresa,
-        "setor": profile.setor.nome if profile.setor else None,
         "ativo": profile.ativo,
         "foto_perfil": profile.foto_perfil.url if profile.foto_perfil else None
     })

@@ -11,7 +11,6 @@ class IsAdministrador(permissions.BasePermission):
             and request.user.groups.filter(name="Administrador").exists()
         )
 
-
 class IsSupervisor(permissions.BasePermission):
     """
     Permite acesso apenas a usuários do grupo 'Supervisor'.
@@ -22,7 +21,6 @@ class IsSupervisor(permissions.BasePermission):
             and request.user.is_authenticated 
             and request.user.groups.filter(name="Supervisor").exists()
         )
-
 
 class IsOperador(permissions.BasePermission):
     """

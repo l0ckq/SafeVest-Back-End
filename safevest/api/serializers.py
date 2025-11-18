@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 User = get_user_model()
-from ..models import Empresa, Setor, Profile, Veste, UsoVeste, LeituraSensor, Alerta
+from ..models import Empresa, Profile, Veste, UsoVeste, LeituraSensor, Alerta
 
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
@@ -27,15 +27,8 @@ class EmpresaSerializer(serializers.ModelSerializer):
     def get_total_usuarios(self, obj):
         return Profile.objects.filter(empresa=obj, deletado=False).count()
 
-class SetorSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Setor
-        fields = ['id', 'nome', 'empresa']
-        read_only_fields = ['empresa']
-
 class ProfileSerializer(serializers.ModelSerializer):
     user = UserSerializer(read_only=True)
-    setor = SetorSerializer(read_only=True)
     empresa = EmpresaSerializer(read_only=True)
     nome_usuario = serializers.CharField(source='user.get_full_name', read_only=True)
     email_usuario = serializers.EmailField(source='user.email', read_only=True)
@@ -43,7 +36,7 @@ class ProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = Profile
         fields = [
-            'user', 'empresa', 'setor', 'ativo', 'foto_perfil', 
+            'user', 'empresa', 'ativo', 'foto_perfil', 
             'deletado', 'deletado_em', 'nome_usuario', 'email_usuario'
         ]
         read_only_fields = ['deletado', 'deletado_em']
@@ -53,7 +46,7 @@ class ProfileResumidoSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Profile
-        fields = ['user', 'empresa', 'setor', 'ativo']
+        fields = ['user', 'empresa', 'ativo']
 
 class VesteSerializer(serializers.ModelSerializer):
     profile = ProfileResumidoSerializer(read_only=True)

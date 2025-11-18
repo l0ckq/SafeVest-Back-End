@@ -18,7 +18,6 @@ from safevest.views import (
     listar_usuarios_empresa,
     usuario_detalhe,
     perfil_usuario,
-    listar_setores_empresa,
     dashboard_estatisticas,
     upload_foto_perfil,
 )
@@ -37,7 +36,6 @@ schema_view = get_schema_view(
 # --- DRF Routers ---
 router = routers.DefaultRouter()
 router.register(r'empresa', viewsets.EmpresaViewSet, basename='empresa')
-router.register(r'setor', viewsets.SetorViewSet, basename='setor')
 router.register(r'profile', viewsets.ProfileViewSet, basename='profile')
 router.register(r'veste', viewsets.VesteViewSet, basename='veste')
 router.register(r'usoveste', viewsets.UsoVesteViewSet, basename='usoveste')
@@ -62,9 +60,6 @@ api_patterns = [
     path('usuarios/<int:user_id>/', usuario_detalhe, name='usuario-detalhe'),
     path('usuarios/por-email/', UserByEmailView.as_view(), name='user-by-email'),
     path('perfil/', perfil_usuario, name='perfil-usuario'),
-
-    # --- EMPRESA ---
-    path('setores/', listar_setores_empresa, name='listar-setores'),
 
     # --- VESTES ---
     path('vestes/bulk-create/', VesteBulkCreateView.as_view(), name='veste-bulk-create'),

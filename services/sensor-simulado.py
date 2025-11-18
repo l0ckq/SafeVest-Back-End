@@ -65,8 +65,8 @@ try:
         client.publish(MQTT_TOPIC, payload_json)
         print(f"-> Enviado: {payload_json}")
         
-        # Pausa a execução por 5 segundos antes de enviar o próximo dado.
-        time.sleep(5)
+        # Pausa a execução antes de enviar o próximo dado.
+        time.sleep(3.5)
 
 except KeyboardInterrupt:
     print("\nSimulador encerrado pelo usuário.")

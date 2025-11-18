@@ -1,7 +1,7 @@
 from rest_framework import viewsets
-from ..models import Empresa, Setor, Profile, Veste, UsoVeste, LeituraSensor
+from ..models import Empresa, Profile, Veste, UsoVeste, LeituraSensor
 from .serializers import (
-    EmpresaSerializer, SetorSerializer, ProfileSerializer, VesteSerializer,
+    EmpresaSerializer, ProfileSerializer, VesteSerializer,
     UsoVesteSerializer, LeituraSensorSerializer
 )
 from drf_yasg.utils import swagger_auto_schema
@@ -15,13 +15,6 @@ class EmpresaViewSet(viewsets.ModelViewSet):
     """
     queryset = Empresa.objects.all()
     serializer_class = EmpresaSerializer
-
-class SetorViewSet(viewsets.ModelViewSet):
-    """
-    Endpoint da API para visualizar e editar Setores.
-    """
-    queryset = Setor.objects.all()
-    serializer_class = SetorSerializer
 
 class ProfileViewSet(viewsets.ModelViewSet):
     """
