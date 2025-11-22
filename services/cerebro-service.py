@@ -158,21 +158,22 @@ def on_message(client, userdata, msg):
             return
 
         veste = data_veste[0]
-        id_veste = veste.get("id_veste")
-        id_usuario = veste.get("usuario")
+        id_veste = veste.get("id")
+        id_usuario = veste.get("profile", {}).get("user", {}).get("id")
+        
         if not id_usuario:
             print(f"   |-> AVISO: Veste {serial} sem usuário vinculado.")
             return
-
         print(f"   |-> Veste {id_veste} vinculada ao Usuário {id_usuario}")
 
         # Monta leitura conforme serializer
         leitura_payload = {
-            "id_veste": id_veste,
-            "bpm": data.get("bpm"),
-            "temp": data.get("temp"),
-            "humi": data.get("humi"),
-            "mq2": data.get("mq2")
+            "veste": id_veste,
+            "batimento": data.get("batimento"),
+            "temperatura_A": data.get("temperatura_A"),
+            "temperatura_C": data.get("temperatura_C"),
+            "nivel_co": data.get("nivel_co"),
+            "nivel_bateria": data.get("nivel_bateria")
         }
 
         resp_leitura = safe_post(API_LEITURAS_ENDPOINT, leitura_payload)
@@ -188,7 +189,6 @@ def on_message(client, userdata, msg):
 
         if status in ["Alerta", "Emergência"]:
             alerta_payload = {
-                "usuario": id_usuario,
                 "leitura_associada": leitura_salva.get("id"),
                 "tipo_alerta": status
             }

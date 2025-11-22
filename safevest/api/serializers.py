@@ -50,16 +50,19 @@ class ProfileResumidoSerializer(serializers.ModelSerializer):
 
 class VesteSerializer(serializers.ModelSerializer):
     profile = ProfileResumidoSerializer(read_only=True)
-    numero_serie_display = serializers.CharField(source='numero_de_serie', read_only=True)
     em_uso = serializers.SerializerMethodField()
-    
+
     class Meta:
         model = Veste
         fields = [
-            'id', 'numero_de_serie', 'numero_serie_display', 'profile', 
-            'em_uso', 'profile'
+            'id',
+            'numero_de_serie',
+            'empresa',
+            'status',
+            'profile',
+            'em_uso'
         ]
-    
+
     def get_em_uso(self, obj):
         return obj.profile is not None
 
@@ -81,7 +84,7 @@ class LeituraSensorSerializer(serializers.ModelSerializer):
     class Meta:
         model = LeituraSensor
         fields = [
-            'id_veste', 'bpm', 'temp', 'humi', 'mq2'
+            'id', 'veste', 'timestamp', 'batimento', 'temperatura_A', 'temperatura_C', 'nivel_co', 'nivel_bateria'
         ]
 
 class AlertaSerializer(serializers.ModelSerializer):
@@ -94,20 +97,28 @@ class AlertaSerializer(serializers.ModelSerializer):
             'id', 'profile', 'usuario_info', 'leitura_associada', 
             'tipo_alerta', 'timestamp', 'timestamp_formatado'
         ]
+        read_only_fields = ['profile']
+    
+    def create(self, validated_data):
+        leitura = validated_data.get("leitura_associada")
+        if leitura and leitura.veste and leitura.veste.profile:
+            validated_data["profile"] = leitura.veste.profile
+        return super().create(validated_data)
 
 # Serializer para criação de usuário
 class UserCreateSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, min_length=8)
     
+    def create(self, validated_data):
+        user = User.objects.create_user(
+            email=validated_data['email'],
+            password=validated_data['password'],
+            first_name=validated_data.get('first_name', ''),
+            last_name=validated_data.get('last_name', '')
+        )
+        return user
+    
     class Meta:
         model = User
         fields = ['email', 'first_name', 'last_name', 'password']
     
-        def create(self, validated_data):
-            user = User.objects.create_user(
-                email=validated_data['email'],
-                password=validated_data['password'],
-                first_name=validated_data.get('first_name', ''),
-                last_name=validated_data.get('last_name', '')
-            )
-            return user

@@ -83,20 +83,27 @@ class UserByEmailView(APIView):
             return Response({"erro": "O parâmetro 'email' é obrigatório."}, status=400)
 
         empresa_user = request.user.profile.empresa
+
         user = (
             User.objects
-            .filter(Q(email=email) | Q(username=email), profile__empresa=empresa_user, profile__deletado=False)
+            .filter(
+                email=email,
+                profile__empresa=empresa_user,
+                profile__deletado=False
+            )
             .select_related("profile__empresa")
             .first()
         )
+
         if not user:
             return Response({"erro": "Usuário não encontrado ou pertence a outra empresa."}, status=404)
 
         profile = user.profile
+
         return Response({
             "id": user.id,
-            "username": user.username,
             "first_name": user.first_name,
+            "last_name": user.last_name,
             "email": user.email,
             "empresa": profile.empresa.nome_empresa,
             "groups": [g.name for g in user.groups.all()]
@@ -106,7 +113,6 @@ class UserByEmailView(APIView):
 # FUNCTION-BASED VIEWS (FBV)
 # ==================================================
 
-from services.validador_cnpj import validar_cnpj
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 
@@ -143,9 +149,6 @@ def signup_empresa_admin(request):
     if any(not data.get(c) for c in campos):
         return Response({"erro": "Todos os campos são obrigatórios."}, status=400)
 
-    if not validar_cnpj(data['cnpj']): # Validação
-        return Response({"erro": "CNPJ inválido."}, status=400)
-
     if Empresa.objects.filter(cnpj=data['cnpj']).exists():
         return Response({"erro": "CNPJ já cadastrado."}, status=400)
     if User.objects.filter(email=data['email_admin']).exists():
@@ -155,7 +158,6 @@ def signup_empresa_admin(request):
         empresa = Empresa.objects.create(nome_empresa=data['nome_empresa'], cnpj=data['cnpj'])
 
         user = User.objects.create_user(
-            username=data['email_admin'],
             email=data['email_admin'],
             password=data['senha_admin'],
             first_name=data['nome_admin']
@@ -249,7 +251,6 @@ def usuario_detalhe(request, user_id):
                 if User.objects.filter(email=data['email']).exclude(id=user.id).exists():
                     return Response({"erro": "Email já em uso."}, status=400)
                 user.email = data['email']
-                user.username = data['email']
 
             if 'nome' in data:
                 user.first_name = data['nome']

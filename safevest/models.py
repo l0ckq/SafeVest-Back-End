@@ -38,11 +38,13 @@ class Profile(models.Model):
         self.user.save()
 
 class Veste(models.Model):
-    id = models.AutoField(primary_key=True)
-    numero_de_serie = models.CharField(max_length=100, unique=True)
-    # A veste pode estar associada a um profile ou não (em estoque)
-    profile = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True, blank=True, related_name='vestes')
-    def __str__(self): return self.numero_de_serie
+    numero_de_serie = models.CharField(max_length=50, unique=True)
+    empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, related_name="vestes", null=True, blank=True)
+    profile = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True, blank=True, related_name="vestes")
+    status = models.CharField(max_length=20, choices=[
+        ('ativa', 'Ativa'),
+        ('inativo', 'Inativo'),
+    ], default='ativa')
 
 class UsoVeste(models.Model):
     id = models.AutoField(primary_key=True)
