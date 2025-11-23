@@ -21,8 +21,6 @@ MQTT_TOPIC = "safevest/dados_sensores"
 # IMPORTANTE: Estes seriais precisam existir na sua tabela 'Veste' no banco de dados.
 vestes_em_operacao = [
     "SV-DEMO-01",
-    "SV-DEMO-02",
-    "SV-DEMO-03",
 ]
 
 print("--- Iniciando Simulador de Sensor ---")

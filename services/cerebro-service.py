@@ -25,7 +25,7 @@ API_ALERTAS_ENDPOINT = f"{API_BASE_URL}/alertas/"
 
 # Credenciais fixas para o serviço do cérebro (crie esse usuário no Django)
 SERVICE_USER = "admin@safevest.com"
-SERVICE_PASS = "admin"
+SERVICE_PASS = "123654789321aA_@safevest"
 
 # =====================================================
 # AUTENTICAÇÃO AUTOMÁTICA
@@ -37,7 +37,7 @@ def autenticar():
     """Faz login e obtém novo par de tokens JWT"""
     global access_token, refresh_token
     try:
-        response = requests.post(API_LOGIN_URL, json={"username": SERVICE_USER, "password": SERVICE_PASS})
+        response = requests.post(API_LOGIN_URL, json={"email": SERVICE_USER, "password": SERVICE_PASS})
         if response.ok:
             tokens = response.json()
             access_token = tokens.get("access")
@@ -124,7 +124,7 @@ def on_connect(client, userdata, flags, rc, properties=None):
     print(f"--- OUVINDO o tópico: {MQTT_TOPIC} ---")
 
 def calcularStatus(data):
-    bpm = data.get("bpm", 0)
+    bpm = data.get("batimento", 0)
     try:
         bpm = int(bpm)
     except:
@@ -148,8 +148,11 @@ def on_message(client, userdata, msg):
         # Consulta veste
         query_url = f"{API_VESTES_ENDPOINT}?numero_de_serie={serial}"
         resp_veste = safe_get(query_url)
-        if not resp_veste or not resp_veste.ok:
-            print(f"   |-> ERRO ao buscar veste {serial}: {getattr(resp_veste, 'status_code', '?')} {getattr(resp_veste, 'text', '')}")
+        if not resp_veste:
+            print(f"   |-> ERRO: Sem resposta ao buscar veste {serial}")
+            return
+        if not resp_veste.ok:
+            print(f"   |-> ERRO HTTP {resp_veste.status_code} ao buscar veste {serial}: {resp_veste.text}")
             return
 
         data_veste = resp_veste.json()
@@ -169,6 +172,7 @@ def on_message(client, userdata, msg):
         # Monta leitura conforme serializer
         leitura_payload = {
             "veste": id_veste,
+            "timestamp": data.get("timestamp"),
             "batimento": data.get("batimento"),
             "temperatura_A": data.get("temperatura_A"),
             "temperatura_C": data.get("temperatura_C"),

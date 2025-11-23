@@ -4,6 +4,7 @@ from rest_framework import generics, status
 from rest_framework.views import APIView
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
+from rest_framework.generics import ListAPIView
 from django.contrib.auth.models import Group
 
 from django.contrib.auth import get_user_model
@@ -108,6 +109,25 @@ class UserByEmailView(APIView):
             "empresa": profile.empresa.nome_empresa,
             "groups": [g.name for g in user.groups.all()]
         })
+
+class VesteBuscarView(ListAPIView):
+    """
+    Busca vestes pelo número de série.
+    Retorna informações completas de profile e usuário.
+    """
+    serializer_class = serializers.VesteSerializer
+
+    def get_queryset(self):
+        numero_de_serie = self.request.query_params.get("numero_de_serie", None)
+        queryset = Veste.objects.all()
+
+        if numero_de_serie:
+            queryset = queryset.filter(numero_de_serie=numero_de_serie)
+
+        # Optimização: traz dados de profile e usuário em um só query
+        queryset = queryset.select_related("profile__user", "profile__empresa", "empresa")
+
+        return queryset
 
 # ==================================================
 # FUNCTION-BASED VIEWS (FBV)
