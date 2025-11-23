@@ -41,26 +41,45 @@ class OnboardingView(APIView):
 class VesteBulkCreateView(APIView):
     """Criação em massa de Vestes (apenas administradores)"""
     permission_classes = [IsAuthenticated, IsAdministrador]
-
+    
     def post(self, request, *args, **kwargs):
         seriais = request.data.get('seriais', [])
+        status = request.data.get('status', 'ativa')  # ← Recebe o status do frontend
+        
         if not isinstance(seriais, list) or not seriais:
             return Response({"erro": "'seriais' deve ser uma lista não-vazia."}, status=400)
-
+        
+        # Pega a empresa do usuário logado
+        try:
+            empresa = request.user.profile.empresa
+        except AttributeError:
+            return Response({"erro": "Usuário não possui empresa associada."}, status=400)
+        
         criadas, ignoradas = [], []
+        
         for serial in seriais:
             numero = str(serial).strip()
             if not numero:
                 continue
-            _, created = Veste.objects.get_or_create(numero_de_serie=numero)
-            (criadas if created else ignoradas).append(numero)
-
+            
+            # Verifica se já existe
+            if Veste.objects.filter(numero_de_serie=numero).exists():
+                ignoradas.append(numero)
+            else:
+                # Cria com todos os campos necessários
+                Veste.objects.create(
+                    numero_de_serie=numero,
+                    empresa=empresa,  # ← Empresa do usuário logado
+                    status=status,    # ← Status escolhido no form
+                    profile=None      # Começa sem associação
+                )
+                criadas.append(numero)
+        
         return Response({
-            "mensagem": f"{len(criadas)} criadas, {len(ignoradas)} ignoradas.",
+            "mensagem": f"{len(criadas)} veste(s) criada(s), {len(ignoradas)} ignorada(s).",
             "criadas": criadas,
             "ignoradas": ignoradas
         }, status=201)
-
 
 class AlertaListCreate(generics.ListCreateAPIView):
     """Listagem e criação de alertas (apenas da empresa do usuário)"""
