@@ -39,7 +39,7 @@ class Profile(models.Model):
 
 class Veste(models.Model):
     numero_de_serie = models.CharField(max_length=50, unique=True)
-    empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, related_name="vestes", null=True, blank=True)
+    empresa = models.ForeignKey(Empresa, on_delete=models.SET_NULL, related_name="vestes", null=True, blank=True)
     profile = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True, blank=True, related_name="vestes")
     status = models.CharField(max_length=20, choices=[
         ('ativa', 'Ativa'),

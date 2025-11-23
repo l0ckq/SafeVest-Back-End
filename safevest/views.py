@@ -434,3 +434,33 @@ def perfil_usuario(request):
         "ativo": profile.ativo,
         "foto_perfil": profile.foto_perfil.url if profile.foto_perfil else None
     })
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def associar_veste(request, veste_id):
+    try:
+        veste = Veste.objects.get(id=veste_id)
+        
+        # PROTEÇÃO: Verifica se está ativa
+        if veste.status != 'ativa':
+            return Response(
+                {"erro": "Não é possível associar vestes inativas."},
+                status=400
+            )
+        
+        # PROTEÇÃO: Verifica se já está em uso
+        if veste.profile is not None:
+            return Response(
+                {"erro": "Esta veste já está associada a outro usuário."},
+                status=400
+            )
+        
+        # Continua com a associação...
+        profile_id = request.data.get('profile_id')
+        veste.profile_id = profile_id
+        veste.save()
+        
+        return Response({"mensagem": "Veste associada com sucesso!"})
+        
+    except Veste.DoesNotExist:
+        return Response({"erro": "Veste não encontrada."}, status=404)
