@@ -28,6 +28,9 @@ class CustomUserAdmin(UserAdmin):
         }),
     )
 
+    def get_queryset(self, request):
+        return super().get_queryset(request)
+
 # Registrar os outros modelos normalmente (Mantive igual ao seu)
 admin.site.register(Empresa)
 admin.site.register(Profile)

@@ -212,103 +212,199 @@ def signup_empresa_admin(request):
 
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, IsAdministrador])
 def criar_usuario_colaborador(request):
-    data = request.data
+    """
+    Cria um novo usuário colaborador na empresa do admin logado.
+    Se for Administrador, marca como staff e superuser.
+    """
+    from django.contrib.auth.models import Group
     
-    # Extração de dados do JSON
-    email = data.get('email')
-    password = data.get('password')
-    first_name = data.get('first_name', '')
-    last_name = data.get('last_name', '')
-    grupo_nome = data.get('grupo')
-
-    # Validações
-    if not email or not password or not grupo_nome:
-        return Response({"erro": "Email, senha e função são obrigatórios."}, status=status.HTTP_400_BAD_REQUEST)
-
+    # Valida dados obrigatórios
+    first_name = request.data.get('first_name')
+    last_name = request.data.get('last_name')
+    email = request.data.get('email')
+    password = request.data.get('password')
+    grupo = request.data.get('grupo')  # "Administrador", "Supervisor", "Operador"
+    
+    if not all([first_name, last_name, email, password, grupo]):
+        return Response(
+            {"erro": "Campos obrigatórios: first_name, last_name, email, password, grupo"},
+            status=400
+        )
+    
+    # Valida grupo
+    if grupo not in ['Administrador', 'Supervisor', 'Operador']:
+        return Response(
+            {"erro": "Grupo inválido. Use: Administrador, Supervisor ou Operador"},
+            status=400
+        )
+    
+    # Verifica se email já existe
+    if User.objects.filter(email=email).exists():
+        return Response(
+            {"erro": "Este email já está cadastrado no sistema."},
+            status=400
+        )
+    
     try:
-        try:
-            grupo_obj = Group.objects.get(name=grupo_nome)
-        except Group.DoesNotExist:
-            return Response({"erro": f"A função '{grupo_nome}' não existe no sistema."}, status=status.HTTP_400_BAD_REQUEST)
-
-        if User.objects.filter(email=email).exists():
-            return Response({"erro": "Este email já está cadastrado."}, status=status.HTTP_400_BAD_REQUEST)
-
-        user = User.objects.create_user(
-            email=email, 
+        # Cria User (sem username, só email)
+        usuario = User.objects.create_user(
+            email=email,
             password=password,
             first_name=first_name,
-            last_name=last_name
+            last_name=last_name,
         )
-        # ---------------------------
-
-        # Adiciona ao Grupo
-        user.groups.add(grupo_obj)
-
-        # Cria o Profile
-        admin_profile = request.user.profile
+        
+        # ============== FLAGS DE ADMIN ==============
+        if grupo == 'Administrador':
+            usuario.is_staff = True       # ← Acessa painel admin
+            usuario.is_superuser = True   # ← Todas as permissões
+            usuario.save()
+        # ============================================
+        
+        # Adiciona ao grupo Django
+        grupo_obj, _ = Group.objects.get_or_create(name=grupo)
+        usuario.groups.add(grupo_obj)
+        
+        # Cria Profile vinculado à empresa do admin logado
         Profile.objects.create(
-            user=user,
-            empresa=admin_profile.empresa,
+            user=usuario,
+            empresa=request.user.profile.empresa,
             ativo=True
         )
-
-        return Response({"mensagem": "Usuário criado com sucesso!"}, status=status.HTTP_201_CREATED)
-
+        
+        return Response({
+            "mensagem": f"Usuário {first_name} {last_name} criado com sucesso!",
+            "id": usuario.id,
+            "email": email,
+            "grupo": grupo,
+            "is_staff": usuario.is_staff,
+            "is_superuser": usuario.is_superuser
+        }, status=201)
+        
     except Exception as e:
-        if 'user' in locals():
-            user.delete()
-        return Response({"erro": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response(
+            {"erro": f"Erro ao criar usuário: {str(e)}"},
+            status=500
+        )
 
-@api_view(['GET', 'PUT', 'DELETE'])
+@api_view(['GET', 'PATCH', 'DELETE'])
 @permission_classes([IsAuthenticated, IsAdministrador])
 def usuario_detalhe(request, user_id):
-    """Detalha, edita ou exclui um usuário (apenas da empresa)"""
-    admin_profile = request.user.profile
+    """
+    GET: Retorna dados de um usuário específico
+    PATCH: Atualiza dados do usuário
+    DELETE: Desativa o usuário (soft delete)
+    """
     try:
-        user = User.objects.get(id=user_id)
-        profile = user.profile
-
-        if profile.empresa != admin_profile.empresa:
-            return Response({"erro": "Usuário pertence a outra empresa."}, status=403)
-        if profile.deletado:
-            return Response({"erro": "Usuário não encontrado."}, status=404)
-
-        if request.method == 'GET':
-            return Response({
-                "id": user.id,
-                "nome": user.first_name,
-                "email": user.email,
-                "funcao": user.groups.first().name if user.groups.exists() else "Sem grupo",
-            })
-
-        elif request.method == 'PUT':
-            data = request.data
-            if 'email' in data and data['email'] != user.email:
-                if User.objects.filter(email=data['email']).exclude(id=user.id).exists():
-                    return Response({"erro": "Email já em uso."}, status=400)
-                user.email = data['email']
-
-            if 'nome' in data:
-                user.first_name = data['nome']
-            user.save()
-
-            if 'funcao' in data:
-                user.groups.clear()
-                novo, _ = Group.objects.get_or_create(name=data['funcao'])
-                user.groups.add(novo)
-
-            profile.save()
-            return Response({"mensagem": "Usuário atualizado com sucesso."})
-
-        elif request.method == 'DELETE':
-            return excluir_usuario(user, admin_profile)
-
+        usuario = User.objects.get(id=user_id)
     except User.DoesNotExist:
-        return Response({"erro": "Usuário não encontrado."}, status=404)
-
+        return Response({"erro": "Usuário não encontrado"}, status=404)
+    
+    if request.method == 'GET':
+        # Monta resposta
+        response_data = {
+            "id": usuario.id,
+            "first_name": usuario.first_name,
+            "last_name": usuario.last_name,
+            "email": usuario.email,
+            "nome": usuario.get_full_name() or usuario.email,
+        }
+        
+        # Pega função (grupo) do usuário
+        grupos = list(usuario.groups.values_list('name', flat=True))
+        response_data['funcao'] = grupos[0] if grupos else None
+        response_data['groups'] = grupos
+        
+        # Pega dados do profile
+        try:
+            profile = usuario.profile
+            response_data['ativo'] = profile.ativo and usuario.is_active
+            response_data['foto_perfil'] = profile.foto_perfil.url if profile.foto_perfil else None
+        except Profile.DoesNotExist:
+            response_data['ativo'] = usuario.is_active
+            response_data['foto_perfil'] = None
+        
+        return Response(response_data)
+    
+    elif request.method == 'PATCH':
+        from django.contrib.auth.models import Group
+        
+        # Atualiza dados básicos do User
+        usuario.first_name = request.data.get('first_name', usuario.first_name)
+        usuario.last_name = request.data.get('last_name', usuario.last_name)
+        
+        # Valida email único
+        novo_email = request.data.get('email', usuario.email)
+        if novo_email != usuario.email:
+            if User.objects.filter(email=novo_email).exclude(id=usuario.id).exists():
+                return Response(
+                    {"erro": "Este email já está em uso por outro usuário."},
+                    status=400
+                )
+            usuario.email = novo_email
+        
+        usuario.save()
+        
+        # Atualiza função (grupo)
+        funcao = request.data.get('funcao')
+        if funcao and funcao in ['Administrador', 'Supervisor', 'Operador']:
+            usuario.groups.clear()
+            grupo, _ = Group.objects.get_or_create(name=funcao)
+            usuario.groups.add(grupo)
+            
+            # ============== FLAGS DE ADMIN ==============
+            if funcao == 'Administrador':
+                usuario.is_staff = True       # ← Acessa painel admin
+                usuario.is_superuser = True   # ← Todas as permissões
+            else:
+                usuario.is_staff = False
+                usuario.is_superuser = False
+            # ============================================
+        
+        # Atualiza status ativo
+        if 'ativo' in request.data:
+            novo_status = request.data.get('ativo')
+            
+            # Atualiza User.is_active
+            usuario.is_active = novo_status
+            usuario.save()
+            
+            # Atualiza Profile.ativo (se existir)
+            try:
+                profile = usuario.profile
+                profile.ativo = novo_status
+                profile.save()
+            except Profile.DoesNotExist:
+                # Se não tem profile, cria um
+                Profile.objects.create(
+                    user=usuario,
+                    empresa=request.user.profile.empresa,
+                    ativo=novo_status
+                )
+        
+        return Response({
+            "mensagem": "Usuário atualizado com sucesso!",
+            "id": usuario.id,
+            "nome": usuario.get_full_name(),
+            "email": usuario.email
+        })
+    
+    elif request.method == 'DELETE':
+        # Hard delete - Remove permanentemente do banco
+        # IMPORTANTE: Isso vai excluir em cascata os dados relacionados
+        # (dependendo do on_delete configurado nos FKs)
+        
+        nome_usuario = usuario.get_full_name() or usuario.email
+        
+        # Deleta o usuário (Profile será deletado em CASCADE)
+        usuario.delete()
+        
+        return Response({
+            "mensagem": f"Usuário {nome_usuario} foi excluído permanentemente.",
+            "tipo": "hard_delete"
+        })
 
 def excluir_usuario(user, admin_profile):
     """Soft delete com verificações"""
