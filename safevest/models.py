@@ -46,6 +46,9 @@ class Veste(models.Model):
         ('inativo', 'Inativo'),
     ], default='ativa')
 
+    def __str__(self):  # Descobri que é o nome do objeto - Por exemplo, isso que aparece no painel admin do Django
+        return self.numero_de_serie
+
 class UsoVeste(models.Model):
     id = models.AutoField(primary_key=True)
     # Se a Veste for deletada, o histórico de uso dela também some
