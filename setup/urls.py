@@ -44,9 +44,6 @@ router.register(r'leiturasensor', viewsets.LeituraSensorViewSet, basename='leitu
 
 # --- Rotas principais ---
 api_patterns = [
-    # Rotas automáticas via router
-    path('', include(router.urls)),
-
     # --- AUTENTICAÇÃO ---
     path('token/', EmailTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
@@ -59,6 +56,7 @@ api_patterns = [
     # --- GESTÃO DE USUÁRIOS ---
     path('usuarios/', listar_usuarios_empresa, name='listar-usuarios'),
     path('usuarios/<int:user_id>/', usuario_detalhe, name='usuario-detalhe'),
+    path('usuarios/delete/<int:user_id>/', usuario_detalhe, name='usuario-detalhe'),
     path('usuarios/por-email/', UserByEmailView.as_view(), name='user-by-email'),
     path('perfil/', perfil_usuario, name='perfil-usuario'),
 
@@ -72,6 +70,9 @@ api_patterns = [
 
     # --- ALERTAS ---
     path('alertas/', AlertaListCreate.as_view(), name='alerta-list-create'),
+
+    # Rotas automáticas via router
+    path('', include(router.urls)), # Comentado temporariamente para testes
 ]
 
 # --- URL Principal ---

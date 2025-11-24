@@ -17,11 +17,34 @@ class EmpresaViewSet(viewsets.ModelViewSet):
     serializer_class = EmpresaSerializer
 
 class ProfileViewSet(viewsets.ModelViewSet):
-    """
-    Endpoint da API para visualizar e editar Profiles de Usuários.
-    """
     queryset = Profile.objects.all()
     serializer_class = ProfileSerializer
+    
+    def destroy(self, request, *args, **kwargs):
+        """Anonimiza em vez de deletar"""
+        profile = self.get_object()
+        user = profile.user
+        
+        import uuid
+        from django.utils import timezone
+        
+        # Anonimiza
+        anonimo_id = f"USUARIO_ANONIMIZADO_{uuid.uuid4().hex[:8].upper()}"
+        user.first_name = "Usuário"
+        user.last_name = "Anonimizado"
+        user.email = f"{anonimo_id.lower()}@anonimizado.local"
+        user.is_active = False
+        user.set_unusable_password()
+        user.save()
+        
+        profile.ativo = False
+        profile.deletado = True
+        profile.deletado_em = timezone.now()
+        if profile.foto_perfil:
+            profile.foto_perfil.delete(save=False)
+        profile.save()
+        
+        return Response({"mensagem": "Usuário anonimizado com sucesso."})
 
 class VesteViewSet(viewsets.ModelViewSet):
     """

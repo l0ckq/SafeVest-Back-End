@@ -25,6 +25,8 @@ from .api.permissoes import (
 
 from services.anonymize import anonymize_user
 
+from django.views.decorators.csrf import csrf_exempt
+
 # ==================================================
 # CLASS-BASED VIEWS (CBV)
 # ==================================================
@@ -289,6 +291,7 @@ def criar_usuario_colaborador(request):
             status=500
         )
 
+@csrf_exempt
 @api_view(['GET', 'PATCH', 'DELETE'])
 @permission_classes([IsAuthenticated, IsAdministrador])
 def usuario_detalhe(request, user_id):
@@ -297,6 +300,15 @@ def usuario_detalhe(request, user_id):
     PATCH: Atualiza dados do usuário
     DELETE: Desativa o usuário (soft delete)
     """
+
+    # ========== LOG FORÇADO ==========
+    print("=" * 50)
+    print(f"🔴 USUARIO_DETALHE CHAMADA!")
+    print(f"🔴 Método: {request.method}")
+    print(f"🔴 User ID: {user_id}")
+    print("=" * 50)
+    # =================================
+
     try:
         usuario = User.objects.get(id=user_id)
     except User.DoesNotExist:
@@ -392,18 +404,62 @@ def usuario_detalhe(request, user_id):
         })
     
     elif request.method == 'DELETE':
-        # Hard delete - Remove permanentemente do banco
-        # IMPORTANTE: Isso vai excluir em cascata os dados relacionados
-        # (dependendo do on_delete configurado nos FKs)
+        """Anonimização conforme LGPD com validações de segurança"""
+        import uuid
+        from django.utils import timezone
         
-        nome_usuario = usuario.get_full_name() or usuario.email
+        # ========== VALIDAÇÕES DE SEGURANÇA ==========
+        if usuario == request.user:
+            return Response({"erro": "Você não pode excluir sua própria conta."}, status=400)
         
-        # Deleta o usuário (Profile será deletado em CASCADE)
-        usuario.delete()
+        if usuario.groups.filter(name='Administrador').exists():
+            count_admins = User.objects.filter(
+                profile__empresa=request.user.profile.empresa,
+                profile__deletado=False,
+                groups__name='Administrador'
+            ).exclude(id=usuario.id).count()
+            
+            if count_admins == 0:
+                return Response({"erro": "Não é possível excluir o último administrador da empresa."}, status=400)
+        
+        try:
+            if usuario.profile.vestes.exists():
+                return Response({"erro": "Este usuário possui vestes associadas. Desassocie-as antes de excluir."}, status=400)
+        except Profile.DoesNotExist:
+            pass
+        
+        # ========== ANONIMIZAÇÃO ==========
+        anonimo_id = f"USUARIO_ANONIMIZADO_{uuid.uuid4().hex[:8].upper()}"
+        
+        usuario.first_name = "Usuário"
+        usuario.last_name = "Anonimizado"
+        usuario.email = f"{anonimo_id.lower()}@anonimizado.local"
+        usuario.is_active = False
+        usuario.is_staff = False
+        usuario.is_superuser = False
+        usuario.set_unusable_password()
+        usuario.save()
+        
+        try:
+            profile = usuario.profile
+            profile.ativo = False
+            profile.deletado = True
+            profile.deletado_em = timezone.now()
+            
+            if profile.foto_perfil:
+                profile.foto_perfil.delete(save=False)
+                profile.foto_perfil = None
+            
+            profile.save()
+        except Profile.DoesNotExist:
+            pass
+        
+        usuario.groups.clear()
         
         return Response({
-            "mensagem": f"Usuário {nome_usuario} foi excluído permanentemente.",
-            "tipo": "hard_delete"
+            "mensagem": "Usuário anonimizado com sucesso conforme LGPD.",
+            "tipo": "anonimizacao",  # ← ISSO
+            "info": "Os dados pessoais foram removidos mas registros estatísticos foram preservados."
         })
 
 def excluir_usuario(user, admin_profile):
