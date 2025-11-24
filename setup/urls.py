@@ -13,7 +13,9 @@ from safevest.views import (
     UserByEmailView,
     OnboardingView,
     VesteBuscarView,
+    associar_veste_operador,
     buscar_veste_por_serial,
+    desassociar_veste,
     signup_empresa_admin,
     criar_usuario_colaborador,
     listar_usuarios_empresa,
@@ -63,6 +65,8 @@ api_patterns = [
     # --- VESTES ---
     path('vestes/bulk-create/', VesteBulkCreateView.as_view(), name='veste-bulk-create'),
     path('vestes/buscar/', VesteBuscarView.as_view(), name='vestes-buscar'),
+    path('vestes/associar/', associar_veste_operador, name='associar-veste'),
+    path('vestes/desassociar/<int:veste_id>/', desassociar_veste, name='desassociar-veste'),
 
     # --- DASHBOARD / UTILITÁRIOS ---
     path('dashboard/', dashboard_estatisticas, name='dashboard'),

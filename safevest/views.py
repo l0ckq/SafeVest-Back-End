@@ -14,7 +14,7 @@ from django.db import transaction, IntegrityError
 from rest_framework.permissions import IsAuthenticated
 from django.db.models import Q
 
-from .models import Alerta, Veste, Empresa, Profile
+from .models import Alerta, UsoVeste, Veste, Empresa, Profile
 from .api import serializers
 
 from .api.permissoes import (
@@ -616,3 +616,105 @@ def associar_veste(request, veste_id):
         
     except Veste.DoesNotExist:
         return Response({"erro": "Veste não encontrada."}, status=404)
+    
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def associar_veste_operador(request):
+    """
+    Associa uma veste a um operador e cria registro em UsoVeste
+    """
+    veste_id = request.data.get('veste_id')
+    operador_id = request.data.get('operador_id')
+    
+    if not veste_id or not operador_id:
+        return Response(
+            {"erro": "veste_id e operador_id são obrigatórios"},
+            status=400
+        )
+    
+    try:
+        veste = Veste.objects.get(id=veste_id)
+        profile = Profile.objects.get(user_id=operador_id)
+    except Veste.DoesNotExist:
+        return Response({"erro": "Veste não encontrada"}, status=404)
+    except Profile.DoesNotExist:
+        return Response({"erro": "Operador não encontrado"}, status=404)
+    
+    # Validações
+    if veste.status != 'ativa':
+        return Response(
+            {"erro": "Apenas vestes ativas podem ser associadas"},
+            status=400
+        )
+    
+    if veste.profile:
+        return Response(
+            {"erro": "Esta veste já está associada a outro operador"},
+            status=400
+        )
+    
+    if UsoVeste.objects.filter(profile=profile, fim_uso__isnull=True).exists():
+        return Response(
+            {"erro": "Este operador já possui uma veste associada"},
+            status=400
+        )
+    
+    # Associa veste ao profile
+    veste.profile = profile
+    veste.save()
+    
+    # Cria registro em UsoVeste
+    uso = UsoVeste.objects.create(
+        veste=veste,
+        profile=profile,
+        inicio_uso=timezone.now()
+        # fim_uso fica null (veste em uso)
+    )
+    
+    return Response({
+        "mensagem": "Veste associada com sucesso!",
+        "veste": veste.numero_de_serie,
+        "operador": profile.user.get_full_name() or profile.user.email,
+        "uso_id": uso.id,
+        "inicio_uso": uso.inicio_uso
+    }, status=201)
+    
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def desassociar_veste(request, veste_id):
+    """
+    Desassocia uma veste de um operador e finaliza o registro em UsoVeste
+    """
+    try:
+        veste = Veste.objects.get(id=veste_id)
+    except Veste.DoesNotExist:
+        return Response({"erro": "Veste não encontrada"}, status=404)
+    
+    # Verifica se a veste está associada
+    if not veste.profile:
+        return Response(
+            {"erro": "Esta veste não está associada a nenhum operador"},
+            status=400
+        )
+    
+    # Finaliza o UsoVeste atual (usando o campo correto 'fim_uso')
+    uso_atual = UsoVeste.objects.filter(
+        veste=veste,
+        fim_uso__isnull=True
+    ).first()
+    
+    if uso_atual:
+        uso_atual.fim_uso = timezone.now()
+        uso_atual.save()
+    
+    # Remove profile da veste
+    operador_nome = veste.profile.user.get_full_name() or veste.profile.user.email
+    veste.profile = None
+    veste.save()
+    
+    return Response({
+        "mensagem": "Veste desassociada com sucesso!",
+        "veste": veste.numero_de_serie,
+        "operador": operador_nome,
+        "fim_uso": timezone.now()
+    })
