@@ -59,16 +59,18 @@ class UsoVeste(models.Model):
     fim_uso = models.DateTimeField(null=True, blank=True)
 
 class LeituraSensor(models.Model):
-    id = models.AutoField(primary_key=True)
-    # Se a Veste for deletada, as leituras dela também somem
-    veste = models.ForeignKey(Veste, on_delete=models.CASCADE, related_name='leituras') 
-    timestamp = models.DateTimeField()
-    # Campos dos sensores agora são opcionais para maior flexibilidade
-    batimento = models.IntegerField(null=True, blank=True)
-    temperatura_A = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
-    temperatura_C = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
-    nivel_co = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
-    nivel_bateria = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    veste = models.ForeignKey(Veste, on_delete=models.CASCADE, related_name='leituras')
+    timestamp = models.DateTimeField(auto_now_add=True)
+    
+    # Garantir que são FloatFields
+    batimento = models.FloatField(null=True, blank=True)
+    temperatura_A = models.FloatField(null=True, blank=True)
+    temperatura_C = models.FloatField(null=True, blank=True)
+    nivel_co = models.FloatField(null=True, blank=True)
+    nivel_bateria = models.FloatField(null=True, blank=True)
+    
+    def __str__(self):
+        return f"Leitura {self.id} - Veste {self.veste.numero_de_serie}"
 
 class Alerta(models.Model):
     id = models.AutoField(primary_key=True)

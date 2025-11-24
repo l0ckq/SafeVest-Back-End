@@ -27,19 +27,24 @@ class EmpresaSerializer(serializers.ModelSerializer):
     def get_total_usuarios(self, obj):
         return Profile.objects.filter(empresa=obj, deletado=False).count()
 
-class ProfileSerializer(serializers.ModelSerializer):
-    user = UserSerializer(read_only=True)
-    empresa = EmpresaSerializer(read_only=True)
-    nome_usuario = serializers.CharField(source='user.get_full_name', read_only=True)
-    email_usuario = serializers.EmailField(source='user.email', read_only=True)
+class LeituraSensorSerializer(serializers.ModelSerializer):
+    veste_info = serializers.CharField(source='veste.numero_de_serie', read_only=True)
+    timestamp_formatado = serializers.DateTimeField(source='timestamp', format="%d/%m/%Y %H:%M", read_only=True)
+    
+    # Garantir que campos numéricos sejam serializados como números
+    batimento = serializers.FloatField(required=False, allow_null=True)
+    temperatura_A = serializers.FloatField(required=False, allow_null=True)
+    temperatura_C = serializers.FloatField(required=False, allow_null=True)
+    nivel_co = serializers.FloatField(required=False, allow_null=True)
+    nivel_bateria = serializers.FloatField(required=False, allow_null=True)
     
     class Meta:
-        model = Profile
+        model = LeituraSensor
         fields = [
-            'user', 'empresa', 'ativo', 'foto_perfil', 
-            'deletado', 'deletado_em', 'nome_usuario', 'email_usuario'
+            'id', 'veste', 'veste_info', 'timestamp', 'batimento', 
+            'temperatura_A', 'temperatura_C', 'nivel_co', 'nivel_bateria', 
+            'timestamp_formatado',
         ]
-        read_only_fields = ['deletado', 'deletado_em']
 
 class ProfileResumidoSerializer(serializers.ModelSerializer):
     user = UserSerializer(read_only=True)

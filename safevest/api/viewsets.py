@@ -1,7 +1,7 @@
 from rest_framework import viewsets
 from ..models import Empresa, Profile, Veste, UsoVeste, LeituraSensor
 from .serializers import (
-    EmpresaSerializer, ProfileSerializer, VesteSerializer,
+    EmpresaSerializer, VesteSerializer,
     UsoVesteSerializer, LeituraSensorSerializer
 )
 from drf_yasg.utils import swagger_auto_schema
@@ -75,3 +75,23 @@ class LeituraSensorViewSet(viewsets.ModelViewSet):
     """
     queryset = LeituraSensor.objects.all()
     serializer_class = LeituraSensorSerializer
+    
+    def create(self, request, *args, **kwargs):
+        # Garantir que campos numéricos sejam convertidos corretamente
+        data = request.data.copy()
+        
+        # Converter campos para float se existirem
+        numeric_fields = ['batimento', 'temperatura_A', 'temperatura_C', 'nivel_co', 'nivel_bateria']
+        for field in numeric_fields:
+            if field in data and data[field] is not None:
+                try:
+                    data[field] = float(data[field])
+                except (ValueError, TypeError):
+                    data[field] = None
+        
+        serializer = self.get_serializer(data=data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=201, headers=headers)

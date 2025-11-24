@@ -169,16 +169,25 @@ def on_message(client, userdata, msg):
             return
         print(f"   |-> Veste {id_veste} vinculada ao Usuário {id_usuario}")
 
+        # Converter dados numéricos para float
+        def safe_float(value, default=None):
+            try:
+                return float(value) if value is not None else default
+            except (ValueError, TypeError):
+                return default
+
         # Monta leitura conforme serializer
         leitura_payload = {
             "veste": id_veste,
             "timestamp": data.get("timestamp"),
-            "batimento": data.get("batimento"),
-            "temperatura_A": data.get("temperatura_A"),
-            "temperatura_C": data.get("temperatura_C"),
-            "nivel_co": data.get("nivel_co"),
-            "nivel_bateria": data.get("nivel_bateria")
+            "batimento": safe_float(data.get("batimento")),
+            "temperatura_A": safe_float(data.get("temperatura_A")),
+            "temperatura_C": safe_float(data.get("temperatura_C")),
+            "nivel_co": safe_float(data.get("nivel_co")),
+            "nivel_bateria": safe_float(data.get("nivel_bateria"))
         }
+
+        print(f"   |-> Enviando leitura: {leitura_payload}")
 
         resp_leitura = safe_post(API_LEITURAS_ENDPOINT, leitura_payload)
         if not resp_leitura or not resp_leitura.ok:
